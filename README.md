@@ -12,7 +12,7 @@ To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use
 * In your terminal, outside of the extension directory, run `npm install -g @vscode/vsce`. This package will allow you to build the extension.
 * Move into the extension directory, and run `vsce package`. It will have 2 prompts, answer them and it will create a `.vsix` file.
 * After doing the previous step, run `code --install-extension ai-chat-0.0.1.vsix`. This should install the extension.
-* If everything is done correctly, use `Ctrl+Shift+P` to open your command prompt, and click `Chat with AI` to open the extension.
+* If everything is done correctly, use `Ctrl+Shift+P` to open your command prompt, and click `AI Chat: Chat with AI` to open the extension. To change the API key, click `AI Chat: Change API Key` to update it.
 
 ## What's in the folder
 

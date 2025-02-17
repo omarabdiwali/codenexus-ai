@@ -12,10 +12,16 @@
   "activationEvents": [],
   "main": "./extension.js",
   "contributes": {
-    "commands": [{
-      "command": "ai-chat.chat",
-      "title": "Chat With AI"
-    }]
+    "commands": [
+      {
+        "command": "ai-chat.chat",
+        "title": "AI Chat: Chat With AI"
+      },
+      {
+        "command": "ai-chat.changeApiKey",
+        "title": "AI Chat: Change API Key"
+      }
+  ]
   },
   "scripts": {
     "lint": "eslint .",

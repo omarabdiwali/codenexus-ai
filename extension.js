@@ -19,18 +19,18 @@ const gemmapro = "google/gemini-2.0-pro-exp-02-05:free";
 
 const llms = [
     gemmapro,
-    deepseek,
     llamalarge,
     gemma,
-    llama
+    llama,
+    deepseek
 ]
 
 const llmNames = [
     "Gemma 2.0 Pro",
-    "Deepseek R1",
     "Llama (405b)",
     "Gemma 2.0 Flash",
-    "Llama (70b)"
+    "Llama (70b)",
+    "Deepseek R1"
 ]
 
 /**
@@ -54,10 +54,17 @@ async function activate(context) {
         await context.globalState.update('aiChatApiKey', apiKey);
     }
 
-    const openChat = new openai.OpenAI({
+    let openChat = new openai.OpenAI({
         baseURL: "https://openrouter.ai/api/v1",
         apiKey: apiKey
     })
+
+    const updateOpenAIClient = (apiKey) => {
+        openChat = new openai.OpenAI({
+            baseURL: "https://openrouter.ai/api/v1",
+            apiKey: apiKey
+        })
+    }
 
     const disposable = vscode.commands.registerCommand('ai-chat.chat', async function () {
         const panel = vscode.window.createWebviewPanel("ai", "AI Chat", vscode.ViewColumn.Two, { enableScripts: true });
@@ -166,7 +173,23 @@ async function activate(context) {
         }, null, context.subscriptions);
     });
 
-    context.subscriptions.push(disposable);
+    const changeApiKeyCommand = vscode.commands.registerCommand('ai-chat.changeApiKey', async () => {
+        const newApiKey = await vscode.window.showInputBox({
+            prompt: 'Enter your new OpenRouter API key',
+            ignoreFocusOut: true,
+            password: true,
+        });
+
+        if (newApiKey) {
+            await context.globalState.update('aiChatApiKey', newApiKey);
+            updateOpenAIClient(newApiKey);
+            vscode.window.showInformationMessage('OpenRouter API key updated successfully.');
+        } else {
+            vscode.window.showWarningMessage('No API Key entered. Key not updated.');
+        }
+    });
+
+    context.subscriptions.push(disposable, changeApiKeyCommand);
 }
 
 const replaceFileMentions = (question, files) => {
@@ -226,6 +249,7 @@ const getOpenFiles = (documents) => {
         if (file.fileName.startsWith("git") || file.fileName.includes(".git")) continue;
         let titleRegEx = new RegExp("\\\\[a-zA-Z]+\\.[a-zA-Z]+");
         let realTitle = file.fileName.match(titleRegEx);
+        if (!realTitle) continue;
 
         for (let title of realTitle) {
             title = title.substring(1);
@@ -485,7 +509,6 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) =
                     button.click();
                 }
             });
-
 
             button.addEventListener("click", () => {
                 const text = prompt.value;
