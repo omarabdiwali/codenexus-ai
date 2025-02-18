@@ -11,26 +11,26 @@ let llmIndex = 0;
 
 const converter = new showdown.Converter();
 
-const llama = "meta-llama/llama-3.1-70b-instruct:free";
+const llama = "meta-llama/llama-3.3-70b-instruct:free";
 const llamalarge = "meta-llama/llama-3.1-405b-instruct:free";
-const deepseek = "deepseek/deepseek-r1:free";
+const deepseek = "deepseek/deepseek-chat:free";
 const gemma = "google/gemini-2.0-flash-lite-preview-02-05:free";
 const gemmapro = "google/gemini-2.0-pro-exp-02-05:free";
 
 const llms = [
     gemmapro,
+    deepseek,
     llamalarge,
     gemma,
-    llama,
-    deepseek
+    llama
 ]
 
 const llmNames = [
     "Gemma 2.0 Pro",
+    "Deepseek V3",
     "Llama (405b)",
     "Gemma 2.0 Flash",
-    "Llama (70b)",
-    "Deepseek R1"
+    "Llama (70b)"
 ]
 
 /**
