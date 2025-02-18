@@ -10,6 +10,7 @@ let textFromFile = "";
 let llmIndex = 0;
 
 const converter = new showdown.Converter();
+converter.setOption("tables", true);
 
 const llama = "meta-llama/llama-3.3-70b-instruct:free";
 const llamalarge = "meta-llama/llama-3.1-405b-instruct:free";
@@ -70,7 +71,7 @@ async function activate(context) {
         const panel = vscode.window.createWebviewPanel("ai", "AI Chat", vscode.ViewColumn.Two, { enableScripts: true });
         panel.webview.html = getWebviewContent(llmIndex, userQuestions, responseHistory);
 
-        const sendStream = (stream, addition) => {
+        const sendStream = (stream) => {
             panel.webview.postMessage({ command: "response", text: converter.makeHtml(stream), file: null });
         }
 
@@ -105,7 +106,7 @@ async function activate(context) {
                 const totalResponse = `${fullResponse}\n\n**${runTime}**`
                 sendStream(totalResponse);
                 questionHistory.push(chat);
-                responseHistory.push(fullResponse);
+                responseHistory.push(totalResponse);
 
             } catch (err) {
                 if (count === llms.length) {
@@ -156,7 +157,8 @@ async function activate(context) {
                             text: mentioned.response,
                             file: mentioned.match,
                             maxVal: fileTitles[mentioned.match].length
-                        });
+                        }
+                    );
                     return;
                 }
                 textFromFile += mentioned.response + "\n";
@@ -542,7 +544,6 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) =
                     appendToChat(text, "");
                 }
             })
-
         </script>
       </body>
     </html>

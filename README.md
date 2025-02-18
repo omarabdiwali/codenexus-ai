@@ -26,7 +26,7 @@ To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use
 ## Get up and running straight away
 
 * Press `F5` to open a new window with your extension loaded.
-* Run your command from the command palette by pressing (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and typing `Hello World`.
+* Run your command from the command palette by pressing (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and typing `AI Chat: Chat with AI`.
 * Set breakpoints in your code inside `extension.js` to debug your extension.
 * Find output from your extension in the debug console..
 
