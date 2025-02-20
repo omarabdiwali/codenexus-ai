@@ -1,13 +1,18 @@
 const vscode = require('vscode');
 const openai = require('openai');
 const showdown = require('showdown');
+const fs = require("node:fs");
 const { performance } = require("perf_hooks");
 
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
+
+let currentResponse = "";
 let textFromFile = "";
 let llmIndex = 0;
+let writeToFile = false;
+let outputFileName = "output";
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
@@ -33,6 +38,16 @@ const llmNames = [
     "Gemma 2.0 Flash",
     "Llama (70b)"
 ]
+
+const readToFile = (content, filename) => {
+    try {
+        const filePath = vscode.workspace.workspaceFolders[0].uri.fsPath + "/" + filename + ".md";
+        fs.writeFileSync(filePath, content, { flag: "a" });
+    } catch (err) {
+        console.error(err);
+        vscode.window.showErrorMessage('Failed to write to file: ' + err.message);
+    }
+}
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -69,11 +84,15 @@ async function activate(context) {
 
     const disposable = vscode.commands.registerCommand('ai-chat.chat', async function () {
         const panel = vscode.window.createWebviewPanel("ai", "AI Chat", vscode.ViewColumn.Two, { enableScripts: true });
-        panel.webview.html = getWebviewContent(llmIndex, userQuestions, responseHistory);
+        panel.webview.html = getWebviewContent(llmIndex, userQuestions, responseHistory, writeToFile, outputFileName);
 
         const sendStream = (stream) => {
+          if (writeToFile) {
+            readToFile(stream, outputFileName);
+          } else {
             panel.webview.postMessage({ command: "response", text: converter.makeHtml(stream), file: null });
-        }
+          }
+        };
 
         const loading = () => {
             panel.webview.postMessage({ command: "loading", text: getSpinner(), file: null });
@@ -81,7 +100,7 @@ async function activate(context) {
 
         const sendChat = async (chat, index, count) => {
             const startTime = performance.now();
-            let fullResponse = "";
+            currentResponse = "";
 
             try {
                 const stream = await openChat.chat.completions.create({
@@ -97,14 +116,25 @@ async function activate(context) {
 
                 for await (const chunk of stream) {
                     const val = chunk.choices[0]?.delta?.content || "";
-                    fullResponse += val;
-                    if (val.length > 0) sendStream(fullResponse, fullResponse.length == val.length);
+                    currentResponse += val;
+                    if (val.length > 0) writeToFile ? sendStream(val) : sendStream(currentResponse);
                 }
+
+                if (currentResponse.length === 0) throw new Error("Error: LLM has given no response!");
 
                 const endTime = performance.now();
                 const runTime = `Call to ${llmNames[index]} took ${(endTime - startTime) / 1000} seconds.`;
-                const totalResponse = `${fullResponse}\n\n**${runTime}**`
-                sendStream(totalResponse);
+                const totalResponse = `${currentResponse}\n\n**${runTime}**`;
+                
+                if (writeToFile) {
+                    const pathToFile = vscode.workspace.workspaceFolders[0].uri.fsPath;
+                    const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile + "/" + outputFileName + ".md"}**`; 
+                    sendStream(`\n\n**${runTime}**\n\n`);
+                    panel.webview.postMessage({ command: "response", text: converter.makeHtml(webviewResponse), file: null });
+                } else {
+                    sendStream(totalResponse);
+                }
+
                 questionHistory.push(chat);
                 responseHistory.push(totalResponse);
 
@@ -112,7 +142,16 @@ async function activate(context) {
                 if (count === llms.length) {
                     console.log("hit an error!");
                     console.log(err.error);
-                    panel.webview.postMessage({ command: "error", text: err.message, file: null, question: chat });
+
+                    if (responseHistory.length < questionHistory.length) {
+                        responseHistory.push(err.message);
+                    }
+                    
+                    if (!writeToFile) {
+                        panel.webview.postMessage({ command: "error", text: err.message, file: null, question: chat });
+                    } else {
+                        vscode.window.showErrorMessage("Error writing to chat: " + err.message)
+                    }
                 } else {
                     index += 1;
                     index %= llms.length;
@@ -125,7 +164,15 @@ async function activate(context) {
             if (message.command == "chat") {
                 let userQuestion = message.text;
                 userQuestions.push(userQuestion);
-                panel.webview.postMessage({ command: 'chat', text: userQuestion });
+                writeToFile = message.writeToFile;
+                outputFileName = message.outputFile ? message.outputFile : "output";
+                
+                if (!writeToFile) {
+                    panel.webview.postMessage({ command: 'chat', text: userQuestion });
+                } else {
+                    panel.webview.postMessage({ command: 'chat', text: userQuestion });
+                    sendStream("## " + userQuestion + "\n\n");
+                }
 
                 let text = message.text;
                 let regEx = new RegExp("@[a-zA-Z]+\\.[a-zA-Z]+", "g");
@@ -151,14 +198,16 @@ async function activate(context) {
                 if (!mentioned.clearance) {
                     questionHistory.push(userQuestion);
                     responseHistory.push(mentioned.response);
-                    panel.webview.postMessage(
-                        {
-                            command: "selection",
-                            text: mentioned.response,
-                            file: mentioned.match,
-                            maxVal: fileTitles[mentioned.match].length
-                        }
-                    );
+                     if (!writeToFile) {
+                        panel.webview.postMessage(
+                            {
+                                command: "selection",
+                                text: mentioned.response,
+                                file: mentioned.match,
+                                maxVal: fileTitles[mentioned.match].length
+                            }
+                        );
+                    }
                     return;
                 }
                 textFromFile += mentioned.response + "\n";
@@ -168,10 +217,13 @@ async function activate(context) {
             } else if (message.command === 'copy') {
                 vscode.env.clipboard.writeText(message.text);
             } else if (message.command == "selectLLM") {
-                llmIndex = message.index;
+                llmIndex = parseInt(message.index);
             }
         })
         panel.onDidDispose(() => {
+            if (responseHistory.length < userQuestions.length) {
+                responseHistory.push(currentResponse ? currentResponse : "Error: Webview was disposed before response was given.");
+            }
         }, null, context.subscriptions);
     });
 
@@ -265,7 +317,7 @@ const getOpenFiles = (documents) => {
     return { texts: fileTexts, titles: fileTitles }
 }
 
-const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) => {
+const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, writeToFile, outputFileName) => {
     let optionsHtml = '';
     for (let i = 0; i < llmNames.length; i++) {
         optionsHtml += `<option value="${i}" ${i === selectedLLMIndex ? 'selected' : ''}>${llmNames[i]}</option>`;
@@ -349,6 +401,7 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) =
                 border: none;
                 padding: 5px 10px;
                 cursor: pointer;
+                width: 100%;
             }
              #ask:hover {
                 background-color: var(--vscode-button-hoverBackground);
@@ -386,6 +439,31 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) =
                 position: relative;
                 display: block;
             }
+            /* Style for the "Write to File" checkbox */
+            #writeToFileContainer {
+                display: flex;
+                align-items: center;
+                margin-bottom: 10px;
+                margin-top: 10px;
+            }
+
+            #writeToFileCheckbox {
+                margin-right: 5px;
+            }
+
+            /* Style for the output file name input */
+            #outputFileNameInput {
+                background-color: var(--vscode-input-background);
+                color: var(--vscode-input-foreground);
+                border: 1px solid var(--vscode-input-border);
+                padding: 2px;
+                font-family: var(--vscode-font-family);
+                margin-left: 5px;
+            }
+
+            #outputFileNameInput:disabled {
+                display: none;
+            }
 
         </style>
         <script>
@@ -402,6 +480,13 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) =
                         ${optionsHtml}
                     </select>
                 </div>
+
+                <div id="writeToFileContainer">
+                    <input type="checkbox" id="writeToFileCheckbox" ${writeToFile ? 'checked' : ''}>
+                    <label for="writeToFileCheckbox">Write to File</label>
+                    <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName}" placeholder="Enter file name...">
+                </div>
+
                 <button id="ask">Ask</button>
             </div>
             <div id="chat-history">
@@ -415,6 +500,8 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) =
             const prompt = document.getElementById("prompt");
             const responseArea = document.getElementById("chat-history");
             const llmSelect = document.getElementById("llmSelect");
+            const writeToFileCheckbox = document.getElementById("writeToFileCheckbox");
+            const outputFileNameInput = document.getElementById("outputFileNameInput");
 
             let prevCommand = null;
             let prevFile = null;
@@ -426,6 +513,19 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) =
                 const selectedIndex = llmSelect.value;
                 vscode.postMessage({ command: 'selectLLM', index: selectedIndex });
             });
+
+            outputFileNameInput.addEventListener("input", (e) => {
+                let val = e.target.value;
+                let filteredValue = val.replace(/[^a-zA-Z0-9]/g, '');
+                e.target.value = filteredValue;
+            })
+
+            const handleDisable = (e) => {
+                e.preventDefault();
+                outputFileNameInput.disabled = !writeToFileCheckbox.checked;
+            };
+
+            writeToFileCheckbox.addEventListener('change', handleDisable);
 
             const validateInput = (n) => {
                 let invalid = new RegExp("[0-9]", "g");
@@ -514,10 +614,11 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) =
 
             button.addEventListener("click", () => {
                 const text = prompt.value;
+                const context = prevCommand == "selection";
                 if (text.length == 0) return;
                 prompt.value = "";
                 disableNumbers();
-                vscode.postMessage({ command: 'chat', text: text, context: prevCommand == "selection", file: prevFile });
+                vscode.postMessage({ command: 'chat', text, context, file: prevFile, writeToFile: writeToFileCheckbox.checked, outputFile: outputFileNameInput.value });
             })
 
            window.addEventListener("message", (e) => {
@@ -529,7 +630,7 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory) =
                 if (command === "response") {
                     if (responseArea.lastElementChild) {
                         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
-                          highlightCode();
+                        highlightCode();
                     }
                 } else if (command === "selection") {
                     activateNumbers();
