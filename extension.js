@@ -503,6 +503,38 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
             const writeToFileCheckbox = document.getElementById("writeToFileCheckbox");
             const outputFileNameInput = document.getElementById("outputFileNameInput");
 
+            const getButtonContainer = (codeBlock) => {
+                const container = document.createElement('div');
+                container.classList.add('code-container');
+                container.style.position = 'relative';
+                codeBlock.parentNode.insertBefore(container, codeBlock);
+                container.appendChild(codeBlock);
+
+                const button = document.createElement('button');
+                button.innerText = 'Copy';
+                button.classList.add('copy-button');
+                button.style.position = 'absolute';
+                button.style.top = '5px';
+                button.style.right = '5px';
+                button.onclick = () => {
+                    const codeToCopy = codeBlock.textContent;
+                    vscode.postMessage({ command: 'copy', text: codeToCopy });
+                    button.innerText = 'Copied!';
+                    setTimeout(() => button.innerText = 'Copy', 2000);
+                };
+
+                return {container, button};
+            }
+            
+            const addCopyButtonsToPreviousChats = () => {
+                document.querySelectorAll("pre code").forEach((codeBlock) => {
+                    const { container, button } = getButtonContainer(codeBlock);
+                    container.appendChild(button);
+                });
+            }
+
+            addCopyButtonsToPreviousChats();
+
             let prevCommand = null;
             let prevFile = null;
             let maximumVal = 0;
@@ -558,27 +590,11 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
 
             const addCopyButtons = () => {
                 document.querySelectorAll('pre code.hljs').forEach((codeBlock) => {
-                    const container = document.createElement('div');
-                    container.classList.add('code-container');
-                    container.style.position = 'relative';
-                    codeBlock.parentNode.insertBefore(container, codeBlock);
-                    container.appendChild(codeBlock);
-
-                    const button = document.createElement('button');
-                    button.innerText = 'Copy';
-                    button.classList.add('copy-button');
-                    button.style.position = 'absolute';
-                    button.style.top = '5px';
-                    button.style.right = '5px';
-                    button.onclick = () => {
-                        const codeToCopy = codeBlock.textContent;
-                        vscode.postMessage({ command: 'copy', text: codeToCopy });
-                        button.innerText = 'Copied!';
-                        setTimeout(() => button.innerText = 'Copy', 2000);
-                    };
+                    const { container, button } = getButtonContainer(codeBlock);
                     container.appendChild(button);
                 });
             };
+
             const highlightCode = () => {
                 hljs.highlightAll();
                 addCopyButtons();
