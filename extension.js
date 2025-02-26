@@ -7,12 +7,14 @@ const { performance } = require("perf_hooks");
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
+const duplicatedFiles = new Set();
 
 let currentResponse = "";
 let textFromFile = "";
 let llmIndex = 0;
 let writeToFile = false;
 let outputFileName = "output";
+let originalQuestionIndex = 0;
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
@@ -84,7 +86,9 @@ async function activate(context) {
 
     const disposable = vscode.commands.registerCommand('ai-chat.chat', async function () {
         const panel = vscode.window.createWebviewPanel("ai", "AI Chat", vscode.ViewColumn.Two, { enableScripts: true });
-        panel.webview.html = getWebviewContent(llmIndex, userQuestions, responseHistory, writeToFile, outputFileName);
+        const cssFile = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'styles.css'));
+        const jsFile = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'webview.js'));
+        panel.webview.html = getWebviewContent(llmIndex, userQuestions, responseHistory, writeToFile, outputFileName, cssFile, jsFile);
 
         const sendStream = (stream) => {
           if (writeToFile) {
@@ -183,13 +187,17 @@ async function activate(context) {
                 let fileTitles = resp.titles;
 
                 if (message.context) {
+                    originalQuestionIndex -= 1;
                     let locations = responseHistory.at(-1).split("\n");
                     let file = getLocationFromResponse(text, locations);
                     textFromFile += addFileToQuestion(message.file, file, fileTexts) + "\n";
-                    text = replaceFileMentions(questionHistory.at(-1), ["@" + message.file]);
+                    text = replaceFileMentions(questionHistory.at(originalQuestionIndex), ["@" + message.file]);
+                    questionHistory[questionHistory.length + originalQuestionIndex] = text;
                     matches = text.match(regEx);
                 } else {
                     textFromFile = "";
+                    originalQuestionIndex = 0;
+                    duplicatedFiles.clear();
                 }
 
                 let mentioned = getMentionedFiles(matches, fileTitles, fileTexts);
@@ -261,6 +269,8 @@ const getLocationFromResponse = (response, locations) => {
 }
 
 const addFileToQuestion = (file, location, texts) => {
+    if (duplicatedFiles.has(location)) return "";
+    duplicatedFiles.add(location);
     return file + ":\n" + texts[location];
 }
 
@@ -283,8 +293,10 @@ const getMentionedFiles = (matches, titles, texts) => {
                 }
             } else {
                 let loc = titles[fileName][0];
+                if (duplicatedFiles.has(loc)) continue;
                 response += fileName + ":\n" + texts[loc];
                 fulfilled.push(match);
+                duplicatedFiles.add(loc);
             }
 
             if (!clearance) break;
@@ -317,7 +329,7 @@ const getOpenFiles = (documents) => {
     return { texts: fileTexts, titles: fileTitles }
 }
 
-const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, writeToFile, outputFileName) => {
+const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, writeToFile, outputFileName, cssFile, jsFile) => {
     let optionsHtml = '';
     for (let i = 0; i < llmNames.length; i++) {
         optionsHtml += `<option value="${i}" ${i === selectedLLMIndex ? 'selected' : ''}>${llmNames[i]}</option>`;
@@ -340,132 +352,9 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+        <link rel="stylesheet" href="${cssFile}">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
         <title>AI Chat</title>
-        <style>
-            body, html {
-                margin: 0;
-                padding: 0;
-                background-color: var(--vscode-editor-background);
-                color: var(--vscode-editor-foreground);
-                font-family: var(--vscode-font-family);
-                font-size: var(--vscode-font-size);
-                font-weight: var(--vscode-font-weight);
-                overflow-y: scroll;
-            }
-            .chat-entry {
-                margin-bottom: 10px;
-                border-bottom: 1px solid var(--vscode-editor-foreground);
-                padding-bottom: 5px;
-            }
-            .question, .response {
-                padding: 5px;
-                margin-bottom: 2px;
-            }
-            .question {
-                background-color: var(--vscode-editor-selectionBackground);
-
-            }
-            .response {
-               background-color: var(--vscode-editor-background);
-            }
-            #prompt {
-                width: 100%;
-                box-sizing: border-box;
-                border: 1px solid var(--vscode-input-border);
-                background-color: var(--vscode-input-background);
-                color: #f0e68c;
-                padding: 5px;
-                margin-bottom: 10px;
-                resize:vertical;
-                font-family: var(--vscode-font-family);
-            }
-            #prompt:focus {
-              outline: none;
-              border-color: var(--vscode-focusBorder);
-            }
-            #llmDropdown {
-                margin-bottom: 10px;
-            }
-             #llmSelect {
-                background-color: var(--vscode-dropdown-background);
-                color: var(--vscode-dropdown-foreground);
-                border: 1px solid var(--vscode-dropdown-border);
-                padding: 2px;
-                font-family: var(--vscode-font-family);
-
-            }
-            #ask {
-                background-color: var(--vscode-button-background);
-                color: var(--vscode-button-foreground);
-                border: none;
-                padding: 5px 10px;
-                cursor: pointer;
-                width: 100%;
-            }
-             #ask:hover {
-                background-color: var(--vscode-button-hoverBackground);
-            }
-            #chat-history {
-                margin-bottom: 15px;
-                overflow-y: auto;
-            }
-            #chat-container {
-                display: flex;
-                flex-direction: column;
-                height: calc(100vh - 20px);
-
-            }
-            #input-area{
-                padding: 10px;
-            }
-            .copy-button {
-                background-color: var(--vscode-button-background);
-                color: var(--vscode-button-foreground);
-                border: none;
-                padding: 2px 5px;
-                cursor: pointer;
-                font-size: var(--vscode-font-size);
-           }
-           .copy-button:hover {
-                background-color: var(--vscode-button-hoverBackground);
-           }
-           pre code.hljs {
-                position: relative;
-                display: block;
-                padding: 1em;
-            }
-            .code-container {
-                position: relative;
-                display: block;
-            }
-            /* Style for the "Write to File" checkbox */
-            #writeToFileContainer {
-                display: flex;
-                align-items: center;
-                margin-bottom: 10px;
-                margin-top: 10px;
-            }
-
-            #writeToFileCheckbox {
-                margin-right: 5px;
-            }
-
-            /* Style for the output file name input */
-            #outputFileNameInput {
-                background-color: var(--vscode-input-background);
-                color: var(--vscode-input-foreground);
-                border: 1px solid var(--vscode-input-border);
-                padding: 2px;
-                font-family: var(--vscode-font-family);
-                margin-left: 5px;
-            }
-
-            #outputFileNameInput:disabled {
-                display: none;
-            }
-
-        </style>
         <script>
             hljs.highlightAll();
         </script>
@@ -481,10 +370,10 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
                     </select>
                 </div>
 
-                <div id="writeToFileContainer">
-                    <input type="checkbox" id="writeToFileCheckbox" ${writeToFile ? 'checked' : ''}>
-                    <label for="writeToFileCheckbox">Write to File</label>
-                    <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName}" placeholder="Enter file name...">
+                <div class="checkbox-button-container">
+                    <input type="checkbox" id="writeToFileCheckbox" class="checkbox-button-input" ${writeToFile ? 'checked' : ''}>
+                    <label for="writeToFileCheckbox" class="checkbox-button-label">Write to File</label>
+                    <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
                 </div>
 
                 <button id="ask">Ask</button>
@@ -493,175 +382,7 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
                 ${chatHistoryHtml}
             </div>
         </div>
-
-        <script>
-            const vscode = acquireVsCodeApi();
-            const button = document.getElementById("ask");
-            const prompt = document.getElementById("prompt");
-            const responseArea = document.getElementById("chat-history");
-            const llmSelect = document.getElementById("llmSelect");
-            const writeToFileCheckbox = document.getElementById("writeToFileCheckbox");
-            const outputFileNameInput = document.getElementById("outputFileNameInput");
-
-            const getButtonContainer = (codeBlock) => {
-                const container = document.createElement('div');
-                container.classList.add('code-container');
-                container.style.position = 'relative';
-                codeBlock.parentNode.insertBefore(container, codeBlock);
-                container.appendChild(codeBlock);
-
-                const button = document.createElement('button');
-                button.innerText = 'Copy';
-                button.classList.add('copy-button');
-                button.style.position = 'absolute';
-                button.style.top = '5px';
-                button.style.right = '5px';
-                button.onclick = () => {
-                    const codeToCopy = codeBlock.textContent;
-                    vscode.postMessage({ command: 'copy', text: codeToCopy });
-                    button.innerText = 'Copied!';
-                    setTimeout(() => button.innerText = 'Copy', 2000);
-                };
-
-                return {container, button};
-            }
-            
-            const addCopyButtonsToPreviousChats = () => {
-                document.querySelectorAll("pre code").forEach((codeBlock) => {
-                    const { container, button } = getButtonContainer(codeBlock);
-                    container.appendChild(button);
-                });
-            }
-
-            addCopyButtonsToPreviousChats();
-
-            let prevCommand = null;
-            let prevFile = null;
-            let maximumVal = 0;
-
-            prompt.focus();
-
-            llmSelect.addEventListener('change', () => {
-                const selectedIndex = llmSelect.value;
-                vscode.postMessage({ command: 'selectLLM', index: selectedIndex });
-            });
-
-            outputFileNameInput.addEventListener("input", (e) => {
-                let val = e.target.value;
-                let filteredValue = val.replace(/[^a-zA-Z0-9]/g, '');
-                e.target.value = filteredValue;
-            })
-
-            const handleDisable = (e) => {
-                e.preventDefault();
-                outputFileNameInput.disabled = !writeToFileCheckbox.checked;
-            };
-
-            writeToFileCheckbox.addEventListener('change', handleDisable);
-
-            const validateInput = (n) => {
-                let invalid = new RegExp("[0-9]", "g");
-                let valid = "";
-                let curPos;
-
-                while ((curPos = invalid.exec(n)) != null) {
-                    if (valid.length == 0 && curPos[0] == '0') {
-                        continue;
-                    } else {
-                        let tempVal = valid + curPos[0];
-                        if (parseInt(tempVal) <= maximumVal) {
-                            valid = tempVal;
-                        }
-                    }
-                }
-
-                return valid;
-            }
-
-            const isNumber = (e) => {
-                e.target.value = validateInput(e.target.value);
-            }
-            const activateNumbers = () => {
-                prompt.addEventListener("input", isNumber)
-            }
-            const disableNumbers = () => {
-                prompt.removeEventListener("input", isNumber)
-            }
-
-            const addCopyButtons = () => {
-                document.querySelectorAll('pre code.hljs').forEach((codeBlock) => {
-                    const { container, button } = getButtonContainer(codeBlock);
-                    container.appendChild(button);
-                });
-            };
-
-            const highlightCode = () => {
-                hljs.highlightAll();
-                addCopyButtons();
-            }
-
-            const appendToChat = (question, responseText) => {
-                const chatEntry = document.createElement('div');
-                chatEntry.classList.add('chat-entry');
-
-                if (question.length > 0) {
-                    const questionDiv = document.createElement('div');
-                    questionDiv.classList.add('question');
-                    questionDiv.innerHTML = \`<strong>You:</strong> \${question}\`;
-                    chatEntry.appendChild(questionDiv);
-                }
-
-                const responseDiv = document.createElement('div');
-                responseDiv.classList.add('response');
-                responseDiv.innerHTML = responseText;
-                chatEntry.appendChild(responseDiv);
-
-                responseArea.appendChild(chatEntry);
-                responseArea.scrollTop = responseArea.scrollHeight;
-                highlightCode();
-            }
-
-            prompt.addEventListener("keydown", (event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    button.click();
-                }
-            });
-
-            button.addEventListener("click", () => {
-                const text = prompt.value;
-                const context = prevCommand == "selection";
-                if (text.length == 0) return;
-                prompt.value = "";
-                disableNumbers();
-                vscode.postMessage({ command: 'chat', text, context, file: prevFile, writeToFile: writeToFileCheckbox.checked, outputFile: outputFileNameInput.value });
-            })
-
-           window.addEventListener("message", (e) => {
-                const { command, text, file, maxVal, question} = e.data;
-                prevCommand = command;
-                prevFile = file;
-                maximumVal = maxVal || 0;
-
-                if (command === "response") {
-                    if (responseArea.lastElementChild) {
-                        responseArea.lastElementChild.querySelector('.response').innerHTML = text;
-                        highlightCode();
-                    }
-                } else if (command === "selection") {
-                    activateNumbers();
-                    responseArea.lastElementChild.querySelector('.response').innerText = text;
-                } else if (command === "loading") {
-                    responseArea.lastElementChild.querySelector('.response').innerHTML = text;
-                    highlightCode();
-                } else if (command === "error") {
-                    responseArea.lastElementChild.querySelector('.response').innerText = text;
-                    highlightCode();
-                } else if (command == 'chat') {
-                    appendToChat(text, "");
-                }
-            })
-        </script>
+        <script src="${jsFile}"></script>
       </body>
     </html>
     `

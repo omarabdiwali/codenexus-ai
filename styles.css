@@ -1,0 +1,145 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    font-weight: var(--vscode-font-weight);
+    overflow-y: scroll;
+}
+.chat-entry {
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--vscode-editor-foreground);
+    padding-bottom: 5px;
+}
+.question, .response {
+    padding: 5px;
+    margin-bottom: 2px;
+}
+.question {
+    background-color: var(--vscode-editor-selectionBackground);
+
+}
+.response {
+   background-color: var(--vscode-editor-background);
+}
+#prompt {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--vscode-input-border);
+    background-color: var(--vscode-input-background);
+    color: #f0e68c;
+    padding: 5px;
+    margin-bottom: 10px;
+    resize:vertical;
+    font-family: var(--vscode-font-family);
+}
+#prompt:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+#llmDropdown {
+    margin-bottom: 10px;
+}
+ #llmSelect {
+    background-color: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    border: 1px solid var(--vscode-dropdown-border);
+    padding: 2px;
+    font-family: var(--vscode-font-family);
+
+}
+#ask {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    width: 100%;
+}
+ #ask:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+#chat-history {
+    margin-bottom: 15px;
+    overflow-y: auto;
+}
+#chat-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 20px);
+
+}
+#input-area{
+    padding: 10px;
+}
+.copy-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 2px 5px;
+    cursor: pointer;
+    font-size: var(--vscode-font-size);
+}
+.copy-button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+pre code.hljs {
+    position: relative;
+    display: block;
+    padding: 1em;
+}
+.code-container {
+    position: relative;
+    display: block;
+}
+#writeToFileContainer {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    margin-top: 10px;
+}
+#outputFileNameInput {
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    padding: 2px;
+    font-family: var(--vscode-font-family);
+    margin-left: 5px;
+}
+#outputFileNameInput:disabled {
+    display: none;
+}
+.checkbox-button-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.checkbox-button-input {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+.checkbox-button-label {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    display: inline-block;
+    margin-right: 5px;
+    user-select: none;
+}
+.checkbox-button-input:checked + .checkbox-button-label {
+    background-color: var(--vscode-button-hoverBackground);
+    color: var(--vscode-button-foreground);
+}
+.checkbox-button-label:not(:checked) {
+    background-color: transparent;
+    border: 1px solid var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
