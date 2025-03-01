@@ -4,6 +4,7 @@ const showdown = require('showdown');
 const fs = require("node:fs");
 const { performance } = require("perf_hooks");
 
+let previousResponse = "";
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
@@ -14,7 +15,6 @@ let textFromFile = "";
 let llmIndex = 0;
 let writeToFile = false;
 let outputFileName = "output";
-let originalQuestionIndex = 0;
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
@@ -43,7 +43,7 @@ const llmNames = [
 
 const readToFile = (content, filename) => {
     try {
-        const filePath = vscode.workspace.workspaceFolders[0].uri.fsPath + "/" + filename + ".md";
+        const filePath = vscode.workspace.workspaceFolders[0].uri.fsPath + `\\` + filename + ".md";
         fs.writeFileSync(filePath, content, { flag: "a" });
     } catch (err) {
         console.error(err);
@@ -132,7 +132,7 @@ async function activate(context) {
                 
                 if (writeToFile) {
                     const pathToFile = vscode.workspace.workspaceFolders[0].uri.fsPath;
-                    const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile + "/" + outputFileName + ".md"}**`; 
+                    const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile + `\\` + outputFileName + ".md"}**`; 
                     sendStream(`\n\n**${runTime}**\n\n`);
                     panel.webview.postMessage({ command: "response", text: converter.makeHtml(webviewResponse), file: null });
                 } else {
@@ -167,7 +167,10 @@ async function activate(context) {
         panel.webview.onDidReceiveMessage(async (message) => {
             if (message.command == "chat") {
                 let userQuestion = message.text;
-                userQuestions.push(userQuestion);
+                if (!message.context) {
+                    userQuestions.push(userQuestion);
+                    questionHistory.push(userQuestion);
+                } 
                 writeToFile = message.writeToFile;
                 outputFileName = message.outputFile ? message.outputFile : "output";
                 
@@ -179,7 +182,7 @@ async function activate(context) {
                 }
 
                 let text = message.text;
-                let regEx = new RegExp("@[a-zA-Z]+\\.[a-zA-Z]+", "g");
+                let regEx = new RegExp("\\B\\@[a-zA-Z]+\\.[a-zA-Z]+", "g");
                 let matches = text.match(regEx);
 
                 let resp = getOpenFiles(vscode.workspace.textDocuments);
@@ -187,38 +190,34 @@ async function activate(context) {
                 let fileTitles = resp.titles;
 
                 if (message.context) {
-                    originalQuestionIndex -= 1;
-                    let locations = responseHistory.at(-1).split("\n");
+                    let locations = previousResponse.split("\n");
                     let file = getLocationFromResponse(text, locations);
                     textFromFile += addFileToQuestion(message.file, file, fileTexts) + "\n";
-                    text = replaceFileMentions(questionHistory.at(originalQuestionIndex), ["@" + message.file]);
-                    questionHistory[questionHistory.length + originalQuestionIndex] = text;
+                    text = replaceFileMentions(questionHistory.at(-1), ["@" + message.file]);
+                    questionHistory[questionHistory.length - 1] = text;
                     matches = text.match(regEx);
                 } else {
                     textFromFile = "";
-                    originalQuestionIndex = 0;
                     duplicatedFiles.clear();
                 }
-
+                
                 let mentioned = getMentionedFiles(matches, fileTitles, fileTexts);
                 text = replaceFileMentions(text, mentioned.fulfilled);
+                textFromFile += mentioned.files;
 
                 if (!mentioned.clearance) {
-                    questionHistory.push(userQuestion);
-                    responseHistory.push(mentioned.response);
-                     if (!writeToFile) {
-                        panel.webview.postMessage(
-                            {
-                                command: "selection",
-                                text: mentioned.response,
-                                file: mentioned.match,
-                                maxVal: fileTitles[mentioned.match].length
-                            }
-                        );
-                    }
+                    previousResponse = mentioned.response;
+                    panel.webview.postMessage(
+                        {
+                            command: "selection",
+                            text: mentioned.response,
+                            file: mentioned.match,
+                            maxVal: fileTitles[mentioned.match].length
+                        }
+                    );
                     return;
                 }
-                textFromFile += mentioned.response + "\n";
+
                 let question = `${text}\n\n${textFromFile}`;
                 loading();
                 await sendChat(question, llmIndex, 0);
@@ -274,12 +273,21 @@ const addFileToQuestion = (file, location, texts) => {
     return file + ":\n" + texts[location];
 }
 
+const highlightFilenameMentions = (text) => {
+    const regEx = new RegExp("\\B\\@[a-zA-Z]+\\.[a-zA-Z]+", "g");
+    return text.replace(regEx, (match) => {
+        return "<code>" + match + "</code>";
+    });
+};
+
 const getMentionedFiles = (matches, titles, texts) => {
-    if (matches == null) return { response: "", clearance: true, match: null, fulfilled: [] };
-    let clearance = true;
+    let files = "";
     let response = "";
+    let clearance = true;
     let lastFile = null;
     let fulfilled = [];
+
+    if (matches == null) return { response, clearance, lastFile, fulfilled, files };
 
     for (let match of matches) {
         let fileName = match.substring(1);
@@ -294,7 +302,7 @@ const getMentionedFiles = (matches, titles, texts) => {
             } else {
                 let loc = titles[fileName][0];
                 if (duplicatedFiles.has(loc)) continue;
-                response += fileName + ":\n" + texts[loc];
+                files += fileName + ":\n" + texts[loc] + "\n\n";
                 fulfilled.push(match);
                 duplicatedFiles.add(loc);
             }
@@ -303,7 +311,7 @@ const getMentionedFiles = (matches, titles, texts) => {
         }
     }
 
-    return { response, clearance, fulfilled, match: lastFile };
+    return { response, clearance, fulfilled, files, match: lastFile };
 }
 
 const getOpenFiles = (documents) => {
@@ -339,7 +347,7 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
     for (let i = 0; i < questionHistory.length; i++) {
         chatHistoryHtml += `
             <div class="chat-entry">
-                <div class="question"><strong>You:</strong> ${questionHistory[i]}</div>
+                <div class="question"><strong>You:</strong> ${highlightFilenameMentions(questionHistory[i])}</div>
                 <div class="response">${converter.makeHtml(responseHistory[i])}</div>
             </div>
         `;
@@ -358,11 +366,21 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
         <script>
             hljs.highlightAll();
         </script>
+        <style>
+          #prompt:empty:before {
+            content: "Type your message here...";
+            color: gray;
+          }
+
+          #prompt {
+            white-space: pre-wrap;
+          }
+        </style>
       </head>
       <body>
         <div id="chat-container">
             <div id="input-area">
-                <textarea id="prompt" rows="3" placeholder="Type your message here..."></textarea>
+                <div id="prompt" contenteditable="true"></div>
                 <div id="llmDropdown">
                     <label for="llmSelect">Select LLM:</label>
                     <select id="llmSelect">
