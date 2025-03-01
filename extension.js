@@ -287,7 +287,7 @@ const getMentionedFiles = (matches, titles, texts) => {
     let lastFile = null;
     let fulfilled = [];
 
-    if (matches == null) return { response, clearance, lastFile, fulfilled, files };
+    if (matches == null) return { response, clearance, match: lastFile, fulfilled, files };
 
     for (let match of matches) {
         let fileName = match.substring(1);
@@ -363,19 +363,6 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
         <link rel="stylesheet" href="${cssFile}">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
         <title>AI Chat</title>
-        <script>
-            hljs.highlightAll();
-        </script>
-        <style>
-          #prompt:empty:before {
-            content: "Type your message here...";
-            color: gray;
-          }
-
-          #prompt {
-            white-space: pre-wrap;
-          }
-        </style>
       </head>
       <body>
         <div id="chat-container">

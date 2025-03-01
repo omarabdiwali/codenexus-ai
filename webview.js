@@ -103,17 +103,17 @@ const addCopyButtons = () => {
     });
 };
 
-addCopyButtons();
+const highlightCode = () => {
+    hljs.highlightAll();
+    addCopyButtons();
+};
+
+highlightCode();
 
 llmSelect.addEventListener('change', () => {
     const selectedIndex = llmSelect.value;
     vscode.postMessage({ command: 'selectLLM', index: selectedIndex });
 });
-
-const highlightCode = () => {
-    hljs.highlightAll();
-    addCopyButtons();
-};
 
 outputFileNameInput.addEventListener("input", (e) => {
     let val = e.target.value;
