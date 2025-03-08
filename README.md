@@ -22,6 +22,9 @@ To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use
 * `extension.js` - this is the main file where you will provide the implementation of your command.
   * The file exports one function, `activate`, which is called the very first time your extension is activated (in this case by executing the command). Inside the `activate` function we call `registerCommand`.
   * We pass the function containing the implementation of the command as the second parameter to `registerCommand`.
+* `webview.js` - this file holds the code that handles the implementation of the chat panel.
+  * The file has all the needed components and functions that is used by the webview panel, and handles the talking to `extension.js` using VSCode's postMessage.
+* `styles.css`, `spinner.css` - these CSS files hold the styling for the webview panel, and the loading spinner.
 
 ## Get up and running straight away
 
