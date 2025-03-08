@@ -1,77 +1,21 @@
 const vscode = acquireVsCodeApi();
-const button = document.getElementById("ask");
+const ask = document.getElementById("ask");
 const prompt = document.getElementById("prompt");
 const responseArea = document.getElementById("chat-history");
 const llmSelect = document.getElementById("llmSelect");
 const writeToFileCheckbox = document.getElementById("writeToFileCheckbox");
 const outputFileNameInput = document.getElementById("outputFileNameInput");
 
-prompt.focus();
-
 let prevCommand = null;
 let prevFile = null;
 let maximumVal = 0;
 
-const validateInput = (n) => {
-    let invalid = new RegExp("[0-9]", "g");
-    let valid = "";
-    let curPos;
-
-    while ((curPos = invalid.exec(n)) != null) {
-        if (valid.length == 0 && curPos[0] == '0') {
-            continue;
-        } else {
-            let tempVal = valid + curPos[0];
-            if (parseInt(tempVal) <= maximumVal) {
-                valid = tempVal;
-            }
-        }
-    }
-
-    return valid;
-}
-
 const highlightFilenameMentions = (text) => {
-    const regEx = new RegExp("\\B\\@[a-zA-Z]+\\.[a-zA-Z]+", "g");
+    const regEx = new RegExp("@[a-zA-Z]+\\.[a-zA-Z]+", "g");
     return text.replace(regEx, (match) => {
-        return `<code>${match}</code>`;
+        return "<code>" + match + "</code>";
     });
 };
-
-const updatePromptWithHighlighting = () => {
-    const rawText = prompt.innerText;
-    const highlightedText = highlightFilenameMentions(rawText);
-    prompt.innerHTML = highlightedText;
-    setCaretAtEnd(prompt);
-};
-
-const setCaretAtEnd = (element) => {
-    const range = document.createRange();
-    const selection = window.getSelection();
-    range.selectNodeContents(element);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
-};
-
-prompt.addEventListener("input", (e) => {
-    if (prevCommand == "selection") {
-        prompt.innerText = validateInput(prompt.innerText);
-        setCaretAtEnd(prompt);
-    } else {
-        updatePromptWithHighlighting();
-    }
-});
-
-prompt.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        button.click();
-    } else if (event.key === "Enter" && event.shiftKey) {
-        document.execCommand('insertLineBreak');
-        event.preventDefault();
-    }
-});
 
 const getButtonContainer = (codeBlock) => {
     const container = document.createElement('div');
@@ -128,6 +72,25 @@ const handleDisable = (e) => {
 
 writeToFileCheckbox.addEventListener('change', handleDisable);
 
+const validateInput = (n) => {
+    let invalid = new RegExp("[0-9]", "g");
+    let valid = "";
+    let curPos;
+
+    while ((curPos = invalid.exec(n)) != null) {
+        if (valid.length == 0 && curPos[0] == '0') {
+            continue;
+        } else {
+            let tempVal = valid + curPos[0];
+            if (parseInt(tempVal) <= maximumVal) {
+                valid = tempVal;
+            }
+        }
+    }
+
+    return valid;
+}
+
 const appendToChat = (question, responseText) => {
     const chatEntry = document.createElement('div');
     chatEntry.classList.add('chat-entry');
@@ -146,13 +109,26 @@ const appendToChat = (question, responseText) => {
 
     responseArea.appendChild(chatEntry);
     responseArea.scrollTop = responseArea.scrollHeight;
-};
+    highlightCode();
+}
 
-button.addEventListener("click", () => {
-    const text = prompt.innerText.trim();
+prompt.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        ask.click();
+    }
+
+    if (prevCommand == "selection") {
+        prompt.value = validateInput(prompt.value);
+    }
+
+});
+
+ask.addEventListener("click", () => {
+    const text = prompt.value.trim();
     const context = prevCommand == "selection";
     if (text.length == 0) return;
-    prompt.innerText = "";
+    prompt.value = "";
     vscode.postMessage({ command: 'chat', text, context, file: prevFile, writeToFile: writeToFileCheckbox.checked, outputFile: outputFileNameInput.value });
 });
 

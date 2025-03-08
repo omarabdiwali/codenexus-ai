@@ -25,40 +25,10 @@ body, html {
    background-color: var(--vscode-editor-background);
 }
 
-/* Style the contenteditable div like a textarea */
-#prompt {
-    width: 100%;
-    box-sizing: border-box;
-    border: 1px solid var(--vscode-input-border);
-    background-color: var(--vscode-input-background);
-    color: #f0e68c;  /* Keep this, or change as needed */
-    padding: 5px;
-    margin-bottom: 10px;
-    resize: vertical; /* Allow vertical resizing */
-    font-family: var(--vscode-font-family);
-    min-height: 60px; /*  Initial height (equivalent of rows="3") */
-    overflow-y: auto;  /*  Add scrollbar when content overflows */
-    white-space: pre-wrap; /* Preserve line breaks and spaces */
-    word-wrap: break-word;  /* Handle long words */
-    outline: none; /* Remove default outline */
-}
-
-#prompt:focus {
-  outline: none;
-  border-color: var(--vscode-focusBorder);
-}
-
-#prompt:empty:before {
-    content: "Type your message here...";
-    color: gray;
-    position: absolute; /* Important for positioning */
-    pointer-events: none; /* Make the placeholder text non-interactive */
-}
-
 #llmDropdown {
     margin-bottom: 10px;
 }
- #llmSelect {
+#llmSelect {
     background-color: var(--vscode-dropdown-background);
     color: var(--vscode-dropdown-foreground);
     border: 1px solid var(--vscode-dropdown-border);
@@ -74,7 +44,7 @@ body, html {
     cursor: pointer;
     width: 100%;
 }
- #ask:hover {
+#ask:hover {
     background-color: var(--vscode-button-hoverBackground);
 }
 #chat-history {
@@ -158,4 +128,20 @@ pre code.hljs {
     background-color: transparent;
     border: 1px solid var(--vscode-button-background);
     color: var(--vscode-button-foreground);
+}
+
+#prompt {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--vscode-input-border);
+    background-color: var(--vscode-input-background);
+    color: #f0e68c;
+    padding: 5px;
+    margin-bottom: 10px;
+    resize:vertical;
+    font-family: var(--vscode-font-family);
+}
+#prompt:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
 }

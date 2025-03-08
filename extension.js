@@ -4,12 +4,12 @@ const showdown = require('showdown');
 const fs = require("node:fs");
 const { performance } = require("perf_hooks");
 
-let previousResponse = "";
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
 const duplicatedFiles = new Set();
 
+let previousResponse = "";
 let currentResponse = "";
 let textFromFile = "";
 let llmIndex = 0;
@@ -77,15 +77,16 @@ async function activate(context) {
         apiKey: apiKey
     })
 
-    const updateOpenAIClient = (apiKey) => {
+    const updateOpenAIClient = (key) => {
         openChat = new openai.OpenAI({
             baseURL: "https://openrouter.ai/api/v1",
-            apiKey: apiKey
+            apiKey: key
         })
     }
 
     const disposable = vscode.commands.registerCommand('ai-chat.chat', async function () {
         const panel = vscode.window.createWebviewPanel("ai", "AI Chat", vscode.ViewColumn.Two, { enableScripts: true });
+        const spinCss = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'spinner.css'));
         const cssFile = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'styles.css'));
         const jsFile = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'webview.js'));
         panel.webview.html = getWebviewContent(llmIndex, userQuestions, responseHistory, writeToFile, outputFileName, cssFile, jsFile);
@@ -99,7 +100,7 @@ async function activate(context) {
         };
 
         const loading = () => {
-            panel.webview.postMessage({ command: "loading", text: getSpinner(), file: null });
+            panel.webview.postMessage({ command: "loading", text: getSpinner(spinCss), file: null });
         }
 
         const sendChat = async (chat, index, count) => {
@@ -131,8 +132,8 @@ async function activate(context) {
                 const totalResponse = `${currentResponse}\n\n**${runTime}**`;
                 
                 if (writeToFile) {
-                    const pathToFile = vscode.workspace.workspaceFolders[0].uri.fsPath;
-                    const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile + `\\` + outputFileName + ".md"}**`; 
+                    const pathToFile = vscode.workspace.workspaceFolders[0].uri.fsPath + '\\' + outputFileName;
+                    const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile}.md**`; 
                     sendStream(`\n\n**${runTime}**\n\n`);
                     panel.webview.postMessage({ command: "response", text: converter.makeHtml(webviewResponse), file: null });
                 } else {
@@ -367,7 +368,7 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
       <body>
         <div id="chat-container">
             <div id="input-area">
-                <div id="prompt" contenteditable="true"></div>
+                <textarea id="prompt" rows="3" placeholder="Type your message here..."></textarea>
                 <div id="llmDropdown">
                     <label for="llmSelect">Select LLM:</label>
                     <select id="llmSelect">
@@ -393,30 +394,10 @@ const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, w
     `
 }
 
-const getSpinner = () => {
+const getSpinner = (cssFile) => {
     return /*html*/`
-    <div style="
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        height: 50px; /* Adjusted height */
-    ">
-        <div style="
-            border: 4px solid rgba(0, 0, 0, 0.1); /* Light grey border */
-            border-top: 4px solid #3498db; /* Blue border-top */
-            border-radius: 50%;
-            width: 20px; /* Smaller width */
-            height: 20px; /* Smaller height */
-            animation: spin 1s linear infinite;
-        "></div>
-    </div>
-    <style>
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+    <link rel="stylesheet" href="${cssFile}">
+    <div id="container"><div id="spinner"></div></div>
     `;
 };
 
