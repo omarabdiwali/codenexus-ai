@@ -183,7 +183,7 @@ async function activate(context) {
                 }
 
                 let text = message.text;
-                let regEx = new RegExp("\\B\\@[a-zA-Z]+\\.[a-zA-Z]+", "g");
+                let regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
                 let matches = text.match(regEx);
 
                 let resp = getOpenFiles(vscode.workspace.textDocuments);
@@ -275,7 +275,7 @@ const addFileToQuestion = (file, location, texts) => {
 }
 
 const highlightFilenameMentions = (text) => {
-    const regEx = new RegExp("\\B\\@[a-zA-Z]+\\.[a-zA-Z]+", "g");
+    const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
     return text.replace(regEx, (match) => {
         return "<code>" + match + "</code>";
     });
@@ -322,7 +322,7 @@ const getOpenFiles = (documents) => {
     for (let i = 0; i < documents.length; i++) {
         let file = documents[i];
         if (file.fileName.startsWith("git") || file.fileName.includes(".git")) continue;
-        let titleRegEx = new RegExp("\\\\[a-zA-Z]+\\.[a-zA-Z]+");
+        let titleRegEx = new RegExp("\\\\[\\[\\]a-zA-Z]+\\.[a-zA-Z]+");
         let realTitle = file.fileName.match(titleRegEx);
         if (!realTitle) continue;
 

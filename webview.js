@@ -11,7 +11,7 @@ let prevFile = null;
 let maximumVal = 0;
 
 const highlightFilenameMentions = (text) => {
-    const regEx = new RegExp("@[a-zA-Z]+\\.[a-zA-Z]+", "g");
+    const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
     return text.replace(regEx, (match) => {
         return "<code>" + match + "</code>";
     });
