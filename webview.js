@@ -117,11 +117,13 @@ prompt.addEventListener("keydown", (event) => {
         event.preventDefault();
         ask.click();
     }
+})
 
+prompt.addEventListener("input", (event) => {
     if (prevCommand == "selection") {
+        event.preventDefault();
         prompt.value = validateInput(prompt.value);
     }
-
 });
 
 ask.addEventListener("click", () => {
@@ -136,7 +138,7 @@ window.addEventListener("message", (e) => {
     const { command, text, file, maxVal, question } = e.data;
     prevCommand = command;
     prevFile = file;
-    maximumVal = maxVal || 0;
+    maximumVal = parseInt(maxVal) || 0;
 
     if (command === "response") {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;

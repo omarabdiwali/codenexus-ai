@@ -89,6 +89,13 @@ async function activate(context) {
         const spinCss = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'spinner.css'));
         const cssFile = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'styles.css'));
         const jsFile = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'webview.js'));
+        
+        // customize what you want to include/exclude from your folder
+        const include = ''
+        const exclude = '{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*_**,**/*.lock,**/*.woff}';
+        const allFiles = await vscode.workspace.findFiles(include, exclude);
+        let fileTitles = getFileNames(allFiles);
+
         panel.webview.html = getWebviewContent(llmIndex, userQuestions, responseHistory, writeToFile, outputFileName, cssFile, jsFile);
 
         const sendStream = (stream) => {
@@ -186,14 +193,11 @@ async function activate(context) {
                 let regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
                 let matches = text.match(regEx);
 
-                let resp = getOpenFiles(vscode.workspace.textDocuments);
-                let fileTexts = resp.texts;
-                let fileTitles = resp.titles;
-
                 if (message.context) {
                     let locations = previousResponse.split("\n");
                     let file = getLocationFromResponse(text, locations);
-                    textFromFile += addFileToQuestion(message.file, file, fileTexts) + "\n";
+                    const fileValue = await addFileToPrompt(message.file, file);
+                    textFromFile += fileValue + "\n"
                     text = replaceFileMentions(questionHistory.at(-1), ["@" + message.file]);
                     questionHistory[questionHistory.length - 1] = text;
                     matches = text.match(regEx);
@@ -202,7 +206,7 @@ async function activate(context) {
                     duplicatedFiles.clear();
                 }
                 
-                let mentioned = getMentionedFiles(matches, fileTitles, fileTexts);
+                let mentioned = await mentionedFiles(matches, fileTitles);
                 text = replaceFileMentions(text, mentioned.fulfilled);
                 textFromFile += mentioned.files;
 
@@ -268,10 +272,12 @@ const getLocationFromResponse = (response, locations) => {
     return location;
 }
 
-const addFileToQuestion = (file, location, texts) => {
+
+const addFileToPrompt = async (file, location) => {
     if (duplicatedFiles.has(location)) return "";
     duplicatedFiles.add(location);
-    return file + ":\n" + texts[location];
+    const text = await getTextFromFile(location);
+    return file + ":\n" + text;
 }
 
 const highlightFilenameMentions = (text) => {
@@ -281,7 +287,32 @@ const highlightFilenameMentions = (text) => {
     });
 };
 
-const getMentionedFiles = (matches, titles, texts) => {
+const getFileNames = (allFiles) => {
+    let fileTitles = {};
+    let titleRegEx = new RegExp("\\\\[\\[\\]a-zA-Z]+\\.[a-zA-Z]+");
+
+    for (const file of allFiles) {
+        let path = file.path.substring(1);
+        path = path.replaceAll("/", "\\")
+        let matchedTitle = path.match(titleRegEx);
+        if (!matchedTitle) continue;
+        for (let title of matchedTitle) {
+            title = title.substring(1);
+            if (title in fileTitles) fileTitles[title].push(file.path);
+            else fileTitles[title] = [file.path];
+        }
+    }
+
+    return fileTitles;
+}
+
+const getTextFromFile = async (path) => {
+    const uri = vscode.Uri.file(path);
+    const text = await vscode.workspace.fs.readFile(uri);
+    return text;
+}
+
+const mentionedFiles = async (matches, titles) => {
     let files = "";
     let response = "";
     let clearance = true;
@@ -303,7 +334,9 @@ const getMentionedFiles = (matches, titles, texts) => {
             } else {
                 let loc = titles[fileName][0];
                 if (duplicatedFiles.has(loc)) continue;
-                files += fileName + ":\n" + texts[loc] + "\n\n";
+                const text = await getTextFromFile(loc);
+                
+                files += fileName + ":\n" + text + "\n\n";
                 fulfilled.push(match);
                 duplicatedFiles.add(loc);
             }
@@ -313,29 +346,6 @@ const getMentionedFiles = (matches, titles, texts) => {
     }
 
     return { response, clearance, fulfilled, files, match: lastFile };
-}
-
-const getOpenFiles = (documents) => {
-    let fileTexts = {};
-    let fileTitles = {};
-
-    for (let i = 0; i < documents.length; i++) {
-        let file = documents[i];
-        if (file.fileName.startsWith("git") || file.fileName.includes(".git")) continue;
-        let titleRegEx = new RegExp("\\\\[\\[\\]a-zA-Z]+\\.[a-zA-Z]+");
-        let realTitle = file.fileName.match(titleRegEx);
-        if (!realTitle) continue;
-
-        for (let title of realTitle) {
-            title = title.substring(1);
-            if (title in fileTitles) fileTitles[title].push(file.fileName);
-            else fileTitles[title] = [file.fileName];
-        }
-
-        fileTexts[file.fileName] = file.getText();
-    }
-
-    return { texts: fileTexts, titles: fileTitles }
 }
 
 const getWebviewContent = (selectedLLMIndex, questionHistory, responseHistory, writeToFile, outputFileName, cssFile, jsFile) => {
