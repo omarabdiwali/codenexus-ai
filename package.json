@@ -1,8 +1,8 @@
 {
   "name": "ai-chat",
   "displayName": "ai-chat",
-  "description": "",
-  "version": "0.0.1",
+  "description": "An AI Chat using OpenRouter",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -12,16 +12,44 @@
   "activationEvents": [],
   "main": "./extension.js",
   "contributes": {
-    "commands": [
+    "keybindings": [
       {
-        "command": "ai-chat.chat",
-        "title": "AI Chat: Chat With AI"
-      },
+        "command": "ai-chat.openChatWithSelection",
+        "key": "ctrl+k",
+        "mac": "cmd+k",
+        "when": "editorTextFocus"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "icon": "./resources/icon.svg",
+          "id": "ai-chat-view",
+          "title": "AI Chat"
+        }
+      ]
+    },
+    "views": {
+      "ai-chat-view": [
+        {
+          "type": "webview",
+          "id": "ai-chat.chat",
+          "name": "AI Chat",
+          "icon": "$(clear-all)",
+          "contextualTitle": "AI Chat"
+        }
+      ]
+    },
+    "commands": [
       {
         "command": "ai-chat.changeApiKey",
         "title": "AI Chat: Change API Key"
+      },
+      {
+        "command": "ai-chat.openChatWithSelection",
+        "title": "AI Chat: Open with Selection"
       }
-  ]
+    ]
   },
   "scripts": {
     "lint": "eslint .",

@@ -1,12 +1,12 @@
 body, html {
     margin: 0;
     padding: 0;
-    background-color: var(--vscode-editor-background);
+    background-color: rgb(0, 33, 43);
     color: var(--vscode-editor-foreground);
     font-family: var(--vscode-font-family);
     font-size: var(--vscode-font-size);
     font-weight: var(--vscode-font-weight);
-    overflow-y: scroll;
+    overflow-y: hidden;
 }
 .chat-entry {
     margin-bottom: 10px;
@@ -21,10 +21,6 @@ body, html {
     background-color: var(--vscode-editor-selectionBackground);
 
 }
-.response {
-   background-color: var(--vscode-editor-background);
-}
-
 #llmDropdown {
     margin-bottom: 10px;
 }
@@ -55,10 +51,10 @@ body, html {
     display: flex;
     flex-direction: column;
     height: calc(100vh - 20px);
-
 }
 #input-area{
     padding: 10px;
+    background-color: rgb(0, 41, 53);
 }
 .copy-button {
     background-color: var(--vscode-button-background);
