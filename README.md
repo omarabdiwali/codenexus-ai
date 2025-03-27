@@ -2,7 +2,7 @@
 
 This VSCode extension allows the users to be able to ask multiple LLMs questions about their code. 
 
-It allows users to mention open files using `@filename.ext` in order for the LLM to be able to have access to that file, and answer the question based on the code. They are able to pick from 5 different LLMs, which are free, and switches between them if there is an error with the selected LLM.
+It allows users to mention open files using `@filename.ext` in order for the LLM to be able to have access to that file, and answer the question based on the code. They are able to pick from 5 different LLMs, which are free, and switches between them if there is an error with the selected LLM. Also, it gives the user the ability to highlight part of a file, and use the keyboard shortcut `Ctrl+K` in order to open the extension and mention the highlighted text automatically.
 
 To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use the extension, you will need an OpenRouter API key, which the extension will ask for when you open it for the first time.
 
@@ -11,8 +11,8 @@ To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use
 * Run `npm i` inside the extension directory to download all the needed libraries
 * In your terminal, outside of the extension directory, run `npm install -g @vscode/vsce`. This package will allow you to build the extension.
 * Move into the extension directory, and run `vsce package`. It will have 2 prompts, answer them and it will create a `.vsix` file.
-* After doing the previous step, run `code --install-extension ai-chat-0.0.1.vsix`. This should install the extension.
-* If everything is done correctly, use `Ctrl+Shift+P` to open your command prompt, and click `AI Chat: Chat with AI` to open the extension. To change the API key, click `AI Chat: Change API Key` to update it.
+* After doing the previous step, run `code --install-extension ai-chat-0.0.2.vsix`. This should install the extension.
+* If everything is done correctly, you will be able to see the extension in the Activity Bar, and have the ability to highlight part of a file and use `Ctrl+K or Cmd+K` to mention it. To change the API key, click `AI Chat: Change API Key` to update it.
 
 ## What's in the folder
 
