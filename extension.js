@@ -19,7 +19,7 @@ let llmIndex = 0;
 let writeToFile = false;
 let outputFileName = "output";
 let fileTitles = {};
-let isShortcut = false;
+let codeFinished = false;
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
@@ -29,24 +29,21 @@ const deepseek = "deepseek/deepseek-chat:free";
 const gemma = "google/gemini-2.0-flash-lite-preview-02-05:free";
 const gemmapro = "google/gemini-2.5-pro-exp-03-25:free";
 const gemma3 = "google/gemma-3-27b-it:free";
-const olympic = "open-r1/olympiccoder-32b:free";
 
 const llms = [
     gemmapro,
     gemma3,
-    deepseek,
-    olympic,
     gemma,
-    llama
+    llama,
+    deepseek
 ];
 
 const llmNames = [
     "Gemma 2.5 Pro",
     "Gemma 3.0 (27b)",
-    "Deepseek V3",
-    "OlympicCoder (32b)",
     "Gemma 2.0 Flash",
-    "Llama (70b)"
+    "Llama (70b)",
+    "Deepseek V3"
 ];
 
 const sendToFile = (content, filename) => {
@@ -63,7 +60,7 @@ const sendStream = (panel, stream) => {
     if (writeToFile) {
         sendToFile(stream, outputFileName);
     } else if (panel && panel.webview) {
-        panel.webview.postMessage({ command: "response", text: converter.makeHtml(stream), file: null });
+        panel.webview.postMessage({ command: "response", text: converter.makeHtml(stream) });
     }
 };
 
@@ -104,7 +101,7 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
             sendToFile(`\n\n**${runTime}**\n\n`, outputFileName);
 
             if (panel && panel.webview) {
-                panel.webview.postMessage({ command: "response", text: converter.makeHtml(webviewResponse), file: null });
+                panel.webview.postMessage({ command: "response", text: converter.makeHtml(webviewResponse) });
             }
 
         } else {
@@ -119,6 +116,7 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
         })
 
     } catch (err) {
+        // console.log(err);
         if (count === llms.length) {
             console.log("hit an error!");
             console.log(err.error);
@@ -128,7 +126,7 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
             }
 
             if (!writeToFile && panel && panel.webview) {
-                panel.webview.postMessage({ command: "error", text: err.message, file: null, question: chat });
+                panel.webview.postMessage({ command: "error", text: err.message, question: chat });
             } else {
                 vscode.window.showErrorMessage("Error writing to chat: " + err.message);
             }
@@ -287,21 +285,33 @@ async function activate(context) {
             vscode.window.showWarningMessage('No API Key entered. Key not updated.');
         }
     });
+    
+    const focusChatCommand = vscode.commands.registerCommand('ai-chat.chat.focus', async (data) => {
+        if (provider) {
+            provider.show();
+            provider.handleIncomingData(data);
+        } else {
+            vscode.window.showWarningMessage("Chat view provider not available yet.");
+            await vscode.commands.executeCommand(`${AIChatViewProvider.viewType}.focus`);
+        }
+    })
 
     const openChatShortcut = vscode.commands.registerCommand('ai-chat.openChatWithSelection', async () => {
-        isShortcut = true;
         const editor = vscode.window.activeTextEditor;
+        let text = "";
+
         if (editor) {
             const selection = editor.selection;
-            textFromFile = editor.document.getText(selection);
+            text = editor.document.getText(selection);
         }
-        await vscode.commands.executeCommand('ai-chat.chat.focus');
+        
+        await vscode.commands.executeCommand('ai-chat.chat.focus', text);
     });
 
     context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(AIChatViewProvider.viewType, provider),
-      changeApiKeyCommand,
-      openChatShortcut
+        vscode.window.registerWebviewViewProvider(AIChatViewProvider.viewType, provider),
+        changeApiKeyCommand,
+        openChatShortcut
     );
 
     const include = ''
@@ -315,8 +325,8 @@ async function activate(context) {
         fileTitles = getFileNames(allFiles);
     });
     fileWatcher.onDidDelete(async (uri) => {
-      const allFiles = await vscode.workspace.findFiles(include, exclude);
-      fileTitles = getFileNames(allFiles);
+        const allFiles = await vscode.workspace.findFiles(include, exclude);
+        fileTitles = getFileNames(allFiles);
     });
 }
 
@@ -332,16 +342,38 @@ class AIChatViewProvider {
         this._extensionUri = _extensionUri;
         this.context = context;
         this.apiKey = context.globalState.get('aiChatApiKey');
+        this.regenHtml = 0;
         this.openChat = new openai.OpenAI({
             baseURL: "https://openrouter.ai/api/v1",
             apiKey: this.apiKey
         });
     }
 
+    handleIncomingData(data) {
+        let trimmed = data.replaceAll("\n", "");
+        trimmed = trimmed.replaceAll(" ", "");
+        
+        if (trimmed.length > 0) {
+            textFromFile = data;
+            let htmlText = converter.makeHtml("```\n" + data + "\n```");
+            this._view.webview.postMessage({ command: 'content', text: htmlText });
+        }
+
+        this._view.webview.postMessage({ command: 'focus' });
+    }
+
     loading() {
-      if (this._view && this._view.webview) {
-        this._view.webview.postMessage({ command: "loading", text: this._getSpinner(), file: null });
-       }
+        if (this._view && this._view.webview) {
+            this._view.webview.postMessage({ command: "loading", text: this._getSpinner() });
+        }
+    }
+
+    show() {
+        if (this._view) {
+            this._view.show();
+        } else {
+            vscode.window.showErrorMessage("Attempted to show view, but it's not resolved yet. Open initially before using the keyboard shortcut.");
+        }
     }
 
     resolveWebviewView(webviewView, _token) {
@@ -355,11 +387,17 @@ class AIChatViewProvider {
         };
 
         webviewView.webview.html = this._getHtmlForWebview();
+        webviewView.webview.postMessage({ command: 'focus' });
 
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible) {
-                webviewView.webview.html = this._getHtmlForWebview();
-                isShortcut = false;
+                if (this.regenHtml != questionsAndResponses.length) {
+                    webviewView.webview.html = this._getHtmlForWebview();
+                    this.regenHtml = questionsAndResponses.length;
+                }
+                this._view.webview.postMessage({ command: 'focus' });
+            } else {
+                textFromFile = "";
             }
         });
 
@@ -373,17 +411,11 @@ class AIChatViewProvider {
                 writeToFile = message.writeToFile;
                 outputFileName = message.outputFile ? message.outputFile : "output";
 
-                if (!writeToFile) {
-                    if (webviewView && webviewView.webview){
-                        webviewView.webview.postMessage({ command: 'chat', text: userQuestion });
-                    }
-                } else {
-                    if (webviewView && webviewView.webview) {
-                        webviewView.webview.postMessage({ command: 'chat', text: userQuestion });
-                    }
-                    
-                    if (!message.context) sendStream(webviewView, "## " + userQuestion + "\n\n");
+                if (webviewView && webviewView.webview) {
+                    webviewView.webview.postMessage({ command: 'chat', text: userQuestion });
                 }
+                
+                if (!message.context && writeToFile) sendStream(webviewView, "## " + userQuestion + "\n\n");
 
                 let text = message.text;
                 let regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
@@ -421,9 +453,10 @@ class AIChatViewProvider {
 
                 let question = `${text}\n\n${textFromFile}`;
                 this.loading();
+                
+                webviewView.webview.postMessage( {command: 'content', text: '' });
                 await sendChat(webviewView, this.openChat, question, llmIndex, 0, originalQuestion);
 
-                isShortcut = false;
                 textFromFile = "";
                 originalQuestion = "";
                 duplicatedFiles.clear();
@@ -491,7 +524,8 @@ class AIChatViewProvider {
                         <label for="writeToFileCheckbox" class="checkbox-button-label">Write to File</label>
                         <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
                     </div>
-
+                    
+                    <div id="content"></div>
                     <button id="ask">Ask</button>
                 </div>
                 <div id="chat-history">

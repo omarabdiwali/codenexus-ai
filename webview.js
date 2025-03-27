@@ -5,6 +5,7 @@ const responseArea = document.getElementById("chat-history");
 const llmSelect = document.getElementById("llmSelect");
 const writeToFileCheckbox = document.getElementById("writeToFileCheckbox");
 const outputFileNameInput = document.getElementById("outputFileNameInput");
+const mentionedCode = document.getElementById("content");
 
 let prevCommand = null;
 let prevFile = null;
@@ -17,7 +18,7 @@ const highlightFilenameMentions = (text) => {
     });
 };
 
-const getButtonContainer = (codeBlock) => {
+const getButtonContainer = (codeBlock, type) => {
     const container = document.createElement('div');
     container.classList.add('code-container');
     container.style.position = 'relative';
@@ -25,31 +26,41 @@ const getButtonContainer = (codeBlock) => {
     container.appendChild(codeBlock);
 
     const button = document.createElement('button');
-    button.innerText = 'Copy';
-    button.classList.add('copy-button');
+    button.innerText = type;
+    button.classList.add(type == 'Copy' ? 'copy-button' : 'cancel-button');
     button.style.position = 'absolute';
     button.style.top = '5px';
     button.style.right = '5px';
     button.onclick = () => {
-        const codeToCopy = codeBlock.textContent;
-        vscode.postMessage({ command: 'copy', text: codeToCopy });
-        button.innerText = 'Copied!';
-        setTimeout(() => button.innerText = 'Copy', 2000);
+        if (type == 'Copy') {
+            const codeToCopy = codeBlock.textContent;
+            vscode.postMessage({ command: 'copy', text: codeToCopy });
+            button.innerText = 'Copied!';
+            setTimeout(() => button.innerText = 'Copy', 2000);
+        }
     };
 
     return { container, button };
 };
 
 const addCopyButtons = () => {
-    document.querySelectorAll("pre code").forEach((codeBlock) => {
-        const { container, button } = getButtonContainer(codeBlock);
+    document.querySelectorAll("#chat-history pre code").forEach((codeBlock) => {
+        const { container, button } = getButtonContainer(codeBlock, 'Copy');
         container.appendChild(button);
     });
 };
 
+const addCancelButtons = () => {
+    document.querySelectorAll("#content pre code").forEach(codeBlock => {
+        const { container, button } = getButtonContainer(codeBlock, 'Cancel');
+        container.appendChild(button);
+    })
+}
+
 const highlightCode = () => {
     hljs.highlightAll();
     addCopyButtons();
+    // addCancelButtons();
 };
 
 highlightCode();
@@ -135,7 +146,7 @@ ask.addEventListener("click", () => {
 });
 
 window.addEventListener("message", (e) => {
-    const { command, text, file, maxVal, question } = e.data;
+    const { command, text, file, maxVal, question, final } = e.data;
     prevCommand = command;
     prevFile = file;
     maximumVal = parseInt(maxVal) || 0;
@@ -151,5 +162,10 @@ window.addEventListener("message", (e) => {
         responseArea.lastElementChild.querySelector('.response').innerText = text;
     } else if (command == 'chat') {
         appendToChat(text, "");
+    } else if (command == 'focus') {
+        prompt.focus();
+    } else if (command == 'content') {
+        content.innerHTML = text;
+        hljs.highlightAll();
     }
 });

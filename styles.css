@@ -141,3 +141,8 @@ pre code.hljs {
   outline: none;
   border-color: var(--vscode-focusBorder);
 }
+#content {
+    max-height: 40vh !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+}
