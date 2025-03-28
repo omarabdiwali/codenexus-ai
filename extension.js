@@ -4,7 +4,7 @@ const showdown = require('showdown');
 const fs = require("node:fs");
 const { performance } = require("perf_hooks");
 
-const questionsAndResponses = [];
+let questionsAndResponses = [];
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
@@ -19,7 +19,8 @@ let llmIndex = 0;
 let writeToFile = false;
 let outputFileName = "output";
 let fileTitles = {};
-let codeFinished = false;
+let currenlyResponding = false;
+let continueResponse = true;
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
@@ -81,13 +82,15 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
         });
 
         for await (const chunk of stream) {
+            if (!continueResponse) break;
             const val = chunk.choices[0]?.delta?.content || "";
             currentResponse += val;
             if (val.length > 0) sendStream(panel, currentResponse);
         }
 
-        if (currentResponse.length === 0) throw new Error("Error: LLM has given no response!");
+        if (currentResponse.length === 0 && continueResponse) throw new Error("Error: LLM has given no response!");
 
+        continueResponse = true;
         const endTime = performance.now();
         let totalTime = `${(endTime - startTime) / 1000}`;
         totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
@@ -402,6 +405,7 @@ class AIChatViewProvider {
 
         webviewView.webview.onDidReceiveMessage(async (message) => {
             if (message.command == "chat") {
+                if (currenlyResponding) return;
                 let userQuestion = message.text;
                 if (!message.context) {
                     userQuestions.push(userQuestion);
@@ -453,19 +457,29 @@ class AIChatViewProvider {
                 let question = `${text}\n\n${textFromFile}`;
                 this.loading();
                 
-                webviewView.webview.postMessage( {command: 'content', text: '' });
+                webviewView.webview.postMessage({ command: 'content', text: '' });
+                webviewView.webview.postMessage({ command: 'cancelView', value: true });
+                
+                currenlyResponding = true;
                 await sendChat(webviewView, this.openChat, question, llmIndex, 0, originalQuestion);
+                webviewView.webview.postMessage({ command: 'cancelView', value: false });
 
                 textFromFile = "";
                 originalQuestion = "";
                 duplicatedFiles.clear();
-
+                currenlyResponding = false;
             } else if (message.command === 'copy') {
                 vscode.env.clipboard.writeText(message.text);
             } else if (message.command == "selectLLM") {
                 llmIndex = parseInt(message.index);
             } else if (message.command === 'remove') {
                 textFromFile = "";
+            } else if (message.command === 'clearHistory') {
+                webviewView.webview.postMessage({ command: 'history', value: currenlyResponding });
+                questionsAndResponses = [];
+            } else if (message.command === 'stopResponse') {
+                continueResponse = false;
+                webviewView.webview.postMessage({ command: 'cancelView', value: false });
             }
         });
     }
@@ -496,7 +510,7 @@ class AIChatViewProvider {
 
         const jsFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "webview.js"));
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "styles.css"));
-        const nonce = getNonce();
+        const nonce = getNonce(32);
 
         return /*html*/`
         <!DOCTYPE html>
@@ -513,11 +527,14 @@ class AIChatViewProvider {
             <div id="chat-container">
                 <div id="input-area">
                     <textarea id="prompt" rows="3" placeholder="Type your message here..."></textarea>
-                    <div id="llmDropdown">
-                        <label for="llmSelect">Select LLM:</label>
-                        <select id="llmSelect">
-                            ${optionsHtml}
-                        </select>
+                    <div class="options-container">
+                        <div id="llmDropdown">
+                            <label for="llmSelect">Select LLM:</label>
+                            <select id="llmSelect">
+                                ${optionsHtml}
+                            </select>
+                        </div>
+                        <button id="clear-history">Clear History</button>
                     </div>
 
                     <div class="checkbox-button-container">
@@ -527,7 +544,10 @@ class AIChatViewProvider {
                     </div>
                     
                     <div id="content"></div>
-                    <button id="ask">Ask</button>
+                    <div class="button-container">
+                        <button id="ask">Ask</button>
+                        <button disabled id="cancel-response">Stop</button>
+                    </div>
                 </div>
                 <div id="chat-history">
                     ${chatHistoryHtml}

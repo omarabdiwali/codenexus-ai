@@ -38,7 +38,7 @@ body, html {
     border: none;
     padding: 5px 10px;
     cursor: pointer;
-    width: 100%;
+    flex-grow: 1;
 }
 #ask:hover {
     background-color: var(--vscode-button-hoverBackground);
@@ -63,6 +63,9 @@ body, html {
     padding: 2px 5px;
     cursor: pointer;
     font-size: var(--vscode-font-size);
+    position: absolute;
+    top: 5px;
+    right: 5px;
 }
 .copy-button:hover {
     background-color: var(--vscode-button-hoverBackground);
@@ -132,7 +135,7 @@ pre code.hljs {
     border: 1px solid var(--vscode-input-border);
     background-color: var(--vscode-input-background);
     color: #f0e68c;
-    padding: 5px;
+    padding: 10px;
     margin-bottom: 10px;
     resize:vertical;
     font-family: var(--vscode-font-family);
@@ -145,4 +148,54 @@ pre code.hljs {
     max-height: 40vh !important;
     overflow-x: auto !important;
     overflow-y: auto !important;
+}
+.code-header {
+    width: 100%;
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 5px;
+    padding-right: 10px;
+    display: flex;
+    justify-content: flex-end;
+    box-sizing: border-box;
+}
+.close-button {
+    background-color: transparent;
+    border: none;
+    color: gray;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 3px;
+    margin: 0;
+    line-height: 1;
+}
+.options-container {
+    display: flex;
+    align-items: center;
+}
+#clear-history {
+    background-color: transparent;
+    color: gray;
+    border: none;
+    cursor: pointer;
+    margin-bottom: 10px;
+    margin-left: 4px;
+}
+.button-container {
+    display: flex;
+    width: 100%;
+}
+#cancel-response {
+    background-color: gray;
+    color: rgb(19, 17, 17);
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    flex-grow: 1;
+}
+#cancel-response:hover {
+    background-color: lightgray;
+}
+#cancel-response:disabled {
+    display: none;
 }
