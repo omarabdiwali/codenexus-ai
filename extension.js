@@ -510,7 +510,7 @@ class AIChatViewProvider {
 
         const jsFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "webview.js"));
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "styles.css"));
-        const nonce = getNonce(32);
+        const nonce = getNonce();
 
         return /*html*/`
         <!DOCTYPE html>
