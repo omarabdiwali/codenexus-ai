@@ -350,8 +350,7 @@ class AIChatViewProvider {
     }
 
     handleIncomingData(data) {
-        let trimmed = data.replaceAll("\n", "");
-        trimmed = trimmed.replaceAll(" ", "");
+        let trimmed = data.replaceAll("\n", "").replaceAll(" ", "");
         
         if (trimmed.length > 0) {
             textFromFile = data;
@@ -465,6 +464,8 @@ class AIChatViewProvider {
                 vscode.env.clipboard.writeText(message.text);
             } else if (message.command == "selectLLM") {
                 llmIndex = parseInt(message.index);
+            } else if (message.command === 'remove') {
+                textFromFile = "";
             }
         });
     }

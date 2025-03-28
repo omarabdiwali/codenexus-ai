@@ -18,7 +18,7 @@ const highlightFilenameMentions = (text) => {
     });
 };
 
-const getButtonContainer = (codeBlock, type) => {
+const getButtonContainer = (codeBlock) => {
     const container = document.createElement('div');
     container.classList.add('code-container');
     container.style.position = 'relative';
@@ -26,41 +26,74 @@ const getButtonContainer = (codeBlock, type) => {
     container.appendChild(codeBlock);
 
     const button = document.createElement('button');
-    button.innerText = type;
-    button.classList.add(type == 'Copy' ? 'copy-button' : 'cancel-button');
+    button.innerText = 'Copy';
+    button.classList.add('copy-button');
     button.style.position = 'absolute';
     button.style.top = '5px';
     button.style.right = '5px';
     button.onclick = () => {
-        if (type == 'Copy') {
-            const codeToCopy = codeBlock.textContent;
-            vscode.postMessage({ command: 'copy', text: codeToCopy });
-            button.innerText = 'Copied!';
-            setTimeout(() => button.innerText = 'Copy', 2000);
-        }
+        const codeToCopy = codeBlock.textContent;
+        vscode.postMessage({ command: 'copy', text: codeToCopy });
+        button.innerText = 'Copied!';
+        setTimeout(() => button.innerText = 'Copy', 2000);
     };
 
     return { container, button };
 };
 
+const addHeaderContainer = (codeBlock) => {
+    const container = document.createElement('div');
+    container.classList.add('code-container');
+    const header = document.createElement('div');
+    header.classList.add('code-header');
+    header.style.width = '100%';
+    header.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+    header.style.padding = '5px';
+    header.style.display = 'flex';
+    header.style.justifyContent = 'flex-end';
+    header.style.boxSizing = 'border-box';
+
+    const closeButton = document.createElement('button');
+    closeButton.innerText = 'x';
+    closeButton.classList.add('close-button');
+    closeButton.style.backgroundColor = 'transparent';
+    closeButton.style.border = 'none';
+    closeButton.style.color = 'gray';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.fontSize = '14px';
+    closeButton.style.fontWeight = 'bold';
+    closeButton.style.padding = '3px';
+    closeButton.style.paddingRight = '10px'
+    closeButton.style.margin = '0';
+    closeButton.style.lineHeight = '1';
+
+    closeButton.onclick = () => {
+        container.remove();
+        vscode.postMessage({ command: "remove" });
+    };
+
+    header.appendChild(closeButton);
+    codeBlock.parentNode.insertBefore(container, codeBlock);
+    container.appendChild(header);
+    container.appendChild(codeBlock);
+};
+
 const addCopyButtons = () => {
-    document.querySelectorAll("#chat-history pre code").forEach((codeBlock) => {
-        const { container, button } = getButtonContainer(codeBlock, 'Copy');
+    document.querySelectorAll("#chat-history pre code").forEach(codeBlock => {
+        const { container, button } = getButtonContainer(codeBlock);
         container.appendChild(button);
     });
 };
 
 const addCancelButtons = () => {
     document.querySelectorAll("#content pre code").forEach(codeBlock => {
-        const { container, button } = getButtonContainer(codeBlock, 'Cancel');
-        container.appendChild(button);
+        addHeaderContainer(codeBlock);
     })
 }
 
 const highlightCode = () => {
     hljs.highlightAll();
     addCopyButtons();
-    // addCancelButtons();
 };
 
 highlightCode();
@@ -146,7 +179,7 @@ ask.addEventListener("click", () => {
 });
 
 window.addEventListener("message", (e) => {
-    const { command, text, file, maxVal, question, final } = e.data;
+    const { command, text, file, maxVal, question } = e.data;
     prevCommand = command;
     prevFile = file;
     maximumVal = parseInt(maxVal) || 0;
@@ -167,5 +200,6 @@ window.addEventListener("message", (e) => {
     } else if (command == 'content') {
         content.innerHTML = text;
         hljs.highlightAll();
+        addCancelButtons();
     }
 });
