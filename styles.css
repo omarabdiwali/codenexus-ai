@@ -181,6 +181,9 @@ pre code.hljs {
     margin-bottom: 10px;
     margin-left: 4px;
 }
+#clear-history:hover {
+    color: lightgray
+}
 .button-container {
     display: flex;
     width: 100%;
