@@ -85,7 +85,7 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
             if (!continueResponse) break;
             const val = chunk.choices[0]?.delta?.content || "";
             currentResponse += val;
-            if (val.length > 0) sendStream(panel, currentResponse);
+            if (val.length > 0) writeToFile ? sendToFile(val, outputFileName) : sendStream(panel, currentResponse);
         }
 
         if (currentResponse.length === 0 && continueResponse) throw new Error("Error: LLM has given no response!");
@@ -259,19 +259,16 @@ async function activate(context) {
         await context.globalState.update('aiChatApiKey', apiKey);
     }
 
-    let openChat = new openai.OpenAI({
-        baseURL: "https://openrouter.ai/api/v1",
-        apiKey: apiKey
-    });
+    const provider = new AIChatViewProvider(context.extensionUri, context);
 
     const updateOpenAIClient = (key) => {
-        openChat = new openai.OpenAI({
-            baseURL: "https://openrouter.ai/api/v1",
-            apiKey: key
-        });
+        if (provider) {
+            provider.openChat = new openai.OpenAI({
+                baseURL: "https://openrouter.ai/api/v1",
+                apiKey: key
+            });
+        }
     };
-
-    const provider = new AIChatViewProvider(context.extensionUri, context);
 
     const changeApiKeyCommand = vscode.commands.registerCommand('ai-chat.changeApiKey', async () => {
         const newApiKey = await vscode.window.showInputBox({
@@ -411,6 +408,7 @@ class AIChatViewProvider {
                     userQuestions.push(userQuestion);
                     questionHistory.push(userQuestion);
                 }
+                
                 writeToFile = message.writeToFile;
                 outputFileName = message.outputFile ? message.outputFile : "output";
 
