@@ -27,8 +27,8 @@ converter.setOption("tables", true);
 
 const llama = "meta-llama/llama-3.3-70b-instruct:free";
 const deepseek = "deepseek/deepseek-chat:free";
-const gemma = "google/gemini-2.0-flash-lite-preview-02-05:free";
-const gemmapro = "google/gemini-2.5-pro-exp-03-25:free";
+const gemma = "google/gemini-2.0-flash-exp:free";
+const gemmapro = "google/learnlm-1.5-pro-experimental:free";
 const gemma3 = "google/gemma-3-27b-it:free";
 
 const llms = [
@@ -40,7 +40,7 @@ const llms = [
 ];
 
 const llmNames = [
-    "Gemma 2.5 Pro",
+    "LearnLM 1.5 Pro",
     "Gemma 3.0 (27b)",
     "Gemma 2.0 Flash",
     "Llama (70b)",
@@ -67,6 +67,7 @@ const sendStream = (panel, stream) => {
 
 const sendChat = async (panel, openChat, chat, index, count, originalQuestion) => {
     const startTime = performance.now();
+    let sendMessage = true;
     currentResponse = "";
 
     try {
@@ -82,6 +83,8 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
         });
 
         for await (const chunk of stream) {
+            if (sendMessage) panel.webview.postMessage({ command: 'cancelView', value: true });
+            sendMessage = false;
             if (!continueResponse) break;
             const val = chunk.choices[0]?.delta?.content || "";
             currentResponse += val;
@@ -91,8 +94,7 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
         if (currentResponse.length === 0 && continueResponse) throw new Error("Error: LLM has given no response!");
 
         continueResponse = true;
-        const endTime = performance.now();
-        let totalTime = `${(endTime - startTime) / 1000}`;
+        let totalTime = `${(performance.now() - startTime) / 1000}`;
         totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
         
         const runTime = `Call to ${llmNames[index]} took ${totalTime} seconds.`;
@@ -120,6 +122,14 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
 
     } catch (err) {
         // console.log(err);
+        if (!continueResponse) {
+            let totalTime = `${(performance.now() - startTime) / 1000}`;
+            totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
+            const runTime = `Call to ${llmNames[index]} took ${totalTime} seconds.`;
+            writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : sendStream(panel, runtime);
+            continueResponse = true;
+            return;
+        }
         if (count === llms.length) {
             console.log("hit an error!");
             console.log(err.error);
@@ -456,8 +466,6 @@ class AIChatViewProvider {
                 this.loading();
                 
                 webviewView.webview.postMessage({ command: 'content', text: '' });
-                webviewView.webview.postMessage({ command: 'cancelView', value: true });
-                
                 currenlyResponding = true;
                 await sendChat(webviewView, this.openChat, question, llmIndex, 0, originalQuestion);
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });

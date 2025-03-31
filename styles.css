@@ -189,15 +189,15 @@ pre code.hljs {
     width: 100%;
 }
 #cancel-response {
-    background-color: gray;
-    color: rgb(19, 17, 17);
-    border: none;
+    background-color: rgba(0, 0, 0, 0.1);
+    color: var(--vscode-button-hoverBackground);
+    border: 2px solid var(--vscode-button-background);
     padding: 5px 10px;
     cursor: pointer;
     flex-grow: 1;
 }
 #cancel-response:hover {
-    background-color: lightgray;
+    background-color: rgba(0, 0, 0, 0.4);
 }
 #cancel-response:disabled {
     display: none;
