@@ -32,15 +32,14 @@ body, html {
     font-family: var(--vscode-font-family);
 
 }
-#ask {
+.ask-chat {
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border: none;
     padding: 5px 10px;
     cursor: pointer;
-    flex-grow: 1;
 }
-#ask:hover {
+.ask-chat:hover {
     background-color: var(--vscode-button-hoverBackground);
 }
 #chat-history {
@@ -184,21 +183,16 @@ pre code.hljs {
 #clear-history:hover {
     color: lightgray
 }
-.button-container {
-    display: flex;
+.button-styling {
     width: 100%;
 }
-#cancel-response {
+.cancel-response {
     background-color: rgba(0, 0, 0, 0.1);
     color: var(--vscode-button-hoverBackground);
     border: 2px solid var(--vscode-button-background);
     padding: 5px 10px;
     cursor: pointer;
-    flex-grow: 1;
 }
-#cancel-response:hover {
+.cancel-response:hover {
     background-color: rgba(0, 0, 0, 0.4);
-}
-#cancel-response:disabled {
-    display: none;
 }

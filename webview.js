@@ -7,7 +7,6 @@ const writeToFileCheckbox = document.getElementById("writeToFileCheckbox");
 const outputFileNameInput = document.getElementById("outputFileNameInput");
 const mentionedCode = document.getElementById("content");
 const clearHistory = document.getElementById('clear-history');
-const cancelResponse = document.getElementById('cancel-response');
 
 let prevCommand = null;
 let prevFile = null;
@@ -141,10 +140,6 @@ clearHistory.addEventListener("click", () => {
     vscode.postMessage({ command: 'clearHistory' });
 })
 
-cancelResponse.addEventListener("click", () => {
-    vscode.postMessage({ command: "stopResponse" });
-})
-
 prompt.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -160,11 +155,15 @@ prompt.addEventListener("input", (event) => {
 });
 
 ask.addEventListener("click", () => {
-    const text = prompt.value.trim();
-    const context = prevCommand == "selection";
-    if (text.length == 0) return;
-    prompt.value = "";
-    vscode.postMessage({ command: 'chat', text, context, file: prevFile, writeToFile: writeToFileCheckbox.checked, outputFile: outputFileNameInput.value });
+    if (ask.innerText == "Ask") {
+        const text = prompt.value.trim();
+        const context = prevCommand == "selection";
+        if (text.length == 0) return;
+        prompt.value = "";
+        vscode.postMessage({ command: 'chat', text, context, file: prevFile, writeToFile: writeToFileCheckbox.checked, outputFile: outputFileNameInput.value });
+    } else {
+        vscode.postMessage({ command: "stopResponse" });
+    }
 });
 
 window.addEventListener("message", (e) => {
@@ -194,6 +193,12 @@ window.addEventListener("message", (e) => {
         if (value) responseArea.replaceChildren(responseArea.lastElementChild);
         else responseArea.replaceChildren();
     } else if (command == 'cancelView') {
-        cancelResponse.disabled = !value;
+        if (value) {
+            ask.classList.replace("ask-chat", "cancel-response");
+            ask.innerText = "Stop";
+        } else {
+            ask.classList.replace("cancel-response", "ask-chat");
+            ask.innerText = "Ask";
+        }
     }
 });

@@ -359,12 +359,13 @@ class AIChatViewProvider {
         });
     }
 
-    handleIncomingData(data) {
+    async handleIncomingData(data) {
         let trimmed = data.replaceAll("\n", "").replaceAll(" ", "");
         
         if (trimmed.length > 0) {
             textFromFile = data;
             let htmlText = converter.makeHtml("```\n" + data + "\n```");
+            await new Promise(res => setTimeout(res, 500));
             this._view.webview.postMessage({ command: 'content', text: htmlText });
         }
 
@@ -550,10 +551,7 @@ class AIChatViewProvider {
                     </div>
                     
                     <div id="content"></div>
-                    <div class="button-container">
-                        <button id="ask">Ask</button>
-                        <button disabled id="cancel-response">Stop</button>
-                    </div>
+                    <button class="button-styling ask-chat" id="ask">Ask</button>
                 </div>
                 <div id="chat-history">
                     ${chatHistoryHtml}
