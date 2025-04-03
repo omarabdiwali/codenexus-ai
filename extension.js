@@ -468,6 +468,7 @@ class AIChatViewProvider {
                 
                 webviewView.webview.postMessage({ command: 'content', text: '' });
                 currenlyResponding = true;
+                webviewView.webview.postMessage({ command: 'disableAsk' });
                 await sendChat(webviewView, this.openChat, question, llmIndex, 0, originalQuestion);
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
 

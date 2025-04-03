@@ -141,7 +141,7 @@ clearHistory.addEventListener("click", () => {
 })
 
 prompt.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && ask.innerText == "Ask" && !ask.disabled) {
         event.preventDefault();
         ask.click();
     }
@@ -196,9 +196,13 @@ window.addEventListener("message", (e) => {
         if (value) {
             ask.classList.replace("ask-chat", "cancel-response");
             ask.innerText = "Stop";
+            ask.disabled = false;
         } else {
             ask.classList.replace("cancel-response", "ask-chat");
             ask.innerText = "Ask";
+            ask.disabled = false;
         }
+    } else if (command == 'disableAsk') {
+        ask.disabled = true;
     }
 });

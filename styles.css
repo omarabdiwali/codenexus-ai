@@ -19,7 +19,6 @@ body, html {
 }
 .question {
     background-color: var(--vscode-editor-selectionBackground);
-
 }
 #llmDropdown {
     margin-bottom: 10px;
@@ -30,7 +29,6 @@ body, html {
     border: 1px solid var(--vscode-dropdown-border);
     padding: 2px;
     font-family: var(--vscode-font-family);
-
 }
 .ask-chat {
     background-color: var(--vscode-button-background);
@@ -185,6 +183,13 @@ pre code.hljs {
 }
 .button-styling {
     width: 100%;
+}
+.button-styling:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.button-styling:disabled:hover {
+    background-color: var(--vscode-button-background);
 }
 .cancel-response {
     background-color: rgba(0, 0, 0, 0.1);
