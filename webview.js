@@ -133,7 +133,6 @@ const appendToChat = (question, responseText) => {
 
     responseArea.appendChild(chatEntry);
     responseArea.scrollTop = responseArea.scrollHeight;
-    highlightCode();
 }
 
 clearHistory.addEventListener("click", () => {

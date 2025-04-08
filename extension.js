@@ -24,26 +24,30 @@ let continueResponse = true;
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
+converter.setOption("smoothLivePreview", true);
 
-const llama = "meta-llama/llama-3.3-70b-instruct:free";
 const deepseek = "deepseek/deepseek-chat:free";
 const gemma = "google/gemini-2.0-flash-exp:free";
-const gemmapro = "google/learnlm-1.5-pro-experimental:free";
+const gemmapro = "google/gemini-2.5-pro-exp-03-25:free";
 const gemma3 = "google/gemma-3-27b-it:free";
+const nvidia = "nvidia/llama-3.1-nemotron-ultra-253b-v1:free";
+const quasar = "openrouter/quasar-alpha";
 
 const llms = [
+    quasar,
     gemmapro,
+    nvidia,
     gemma3,
     gemma,
-    llama,
     deepseek
 ];
 
 const llmNames = [
-    "LearnLM 1.5 Pro",
+    "Quasar Alpha",
+    "Gemma 2.5 Pro",
+    "Llama 3.1 Nemotron",
     "Gemma 3.0 (27b)",
     "Gemma 2.0 Flash",
-    "Llama (70b)",
     "Deepseek V3"
 ];
 
@@ -529,6 +533,7 @@ class AIChatViewProvider {
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
             <link rel="stylesheet" href="${cssFile}">
             <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.5/dist/purify.min.js"></script>
             <title>AI Chat</title>
           </head>
           <body>
