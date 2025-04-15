@@ -31,24 +31,24 @@ const gemma = "google/gemini-2.0-flash-exp:free";
 const gemmapro = "google/gemini-2.5-pro-exp-03-25:free";
 const gemma3 = "google/gemma-3-27b-it:free";
 const nvidia = "nvidia/llama-3.1-nemotron-ultra-253b-v1:free";
-const alpha = "openrouter/optimus-alpha";
+const llama = "meta-llama/llama-4-maverick:free";
 
 const llms = [
-    alpha,
-    gemmapro,
     nvidia,
-    gemma3,
+    gemmapro,
+    deepseek,
+    llama,
     gemma,
-    deepseek
+    gemma3
 ];
 
 const llmNames = [
-    "Optimus Alpha",
-    "Gemma 2.5 Pro",
     "Llama 3.1 Nemotron",
-    "Gemma 3.0 (27b)",
+    "Gemma 2.5 Pro",
+    "Deepseek V3",
+    "Llama 4 Maverick",
     "Gemma 2.0 Flash",
-    "Deepseek V3"
+    "Gemma 3.0 (27b)",
 ];
 
 const sendToFile = (content, filename) => {
