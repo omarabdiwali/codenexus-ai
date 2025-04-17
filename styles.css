@@ -82,6 +82,9 @@ pre code.hljs {
     margin-bottom: 10px;
     margin-top: 10px;
 }
+.checkbox-button-container-hidden {
+    display: none;
+}
 #outputFileNameInput {
     background-color: var(--vscode-input-background);
     color: var(--vscode-input-foreground);

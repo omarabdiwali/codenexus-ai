@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const openai = require('openai');
 const showdown = require('showdown');
 const fs = require("node:fs");
+const path = require('path');
 const { performance } = require("perf_hooks");
 
 let questionsAndResponses = [];
@@ -53,7 +54,10 @@ const llmNames = [
 
 const sendToFile = (content, filename) => {
     try {
-        const filePath = vscode.workspace.workspaceFolders[0].uri.fsPath + `\\` + filename + ".md";
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0) {
+            throw new Error('No workspace folder is open.');
+        }
+        const filePath = path.join(vscode.workspace.workspaceFolders[0].uri.path, `${filename}.md`).slice(1);
         fs.writeFileSync(filePath, content, { flag: "a" });
     } catch (err) {
         console.error(err);
@@ -105,8 +109,8 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
         const totalResponse = `${currentResponse}\n\n**${runTime}**`;
 
         if (writeToFile) {
-            const pathToFile = vscode.workspace.workspaceFolders[0].uri.fsPath + '\\' + outputFileName;
-            const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile}.md**`;
+            const pathToFile = path.join(vscode.workspace.workspaceFolders[0].uri.path, `${outputFileName}.md`).slice(1);
+            const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile}**`;
             sendToFile(`\n\n**${runTime}**\n\n`, outputFileName);
 
             if (panel && panel.webview) {
@@ -523,6 +527,7 @@ class AIChatViewProvider {
         const jsFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "webview.js"));
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "styles.css"));
         const nonce = getNonce();
+        const disableOutput = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
 
         return /*html*/`
         <!DOCTYPE html>
@@ -550,7 +555,7 @@ class AIChatViewProvider {
                         <button id="clear-history">Clear History</button>
                     </div>
 
-                    <div class="checkbox-button-container">
+                    <div class="${disableOutput ? "checkbox-button-container-hidden" : "checkbox-button-container"}">
                         <input type="checkbox" id="writeToFileCheckbox" class="checkbox-button-input" ${writeToFile ? 'checked' : ''}>
                         <label for="writeToFileCheckbox" class="checkbox-button-label">Write to File</label>
                         <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
