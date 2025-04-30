@@ -29,27 +29,27 @@ converter.setOption("smoothLivePreview", true);
 
 const deepseek = "deepseek/deepseek-chat:free";
 const gemma = "google/gemini-2.0-flash-exp:free";
-const gemmapro = "google/gemini-2.5-pro-exp-03-25:free";
+const qwen = "qwen/qwen3-235b-a22b:free";
 const gemma3 = "google/gemma-3-27b-it:free";
 const nvidia = "nvidia/llama-3.1-nemotron-ultra-253b-v1:free";
 const llama = "meta-llama/llama-4-maverick:free";
 
 const llms = [
     nvidia,
-    gemmapro,
-    deepseek,
     llama,
+    qwen,
+    deepseek,
     gemma,
     gemma3
 ];
 
 const llmNames = [
     "Llama 3.1 Nemotron",
-    "Gemma 2.5 Pro",
-    "Deepseek V3",
     "Llama 4 Maverick",
+    "Qwen3",
+    "Deepseek V3",
     "Gemma 2.0 Flash",
-    "Gemma 3.0 (27b)",
+    "Gemma 3.0 (27b)"
 ];
 
 const sendToFile = (content, filename) => {

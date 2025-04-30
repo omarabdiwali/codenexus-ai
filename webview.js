@@ -65,18 +65,29 @@ const addCopyButtons = () => {
     });
 };
 
-const addCancelButtons = () => {
-    document.querySelectorAll("#content pre code").forEach(codeBlock => {
-        cancelButtons(codeBlock);
-    })
-}
+const highlightNewCodeBlocks = () => {
+    const newCodeBlocks = document.querySelectorAll("#chat-history pre code:not(.hljs)");
+    newCodeBlocks.forEach(codeBlock => {
+        hljs.highlightElement(codeBlock);
+        copyButtons(codeBlock);
+        codeBlock.classList.add('hljs');
+    });
+};
 
-const highlightCode = () => {
+const highlightMentionedCodeBlock = () => {
+    document.querySelectorAll("#content pre code").forEach(codeBlock => {
+        hljs.highlightElement(codeBlock);
+        cancelButtons(codeBlock);
+        codeBlock.classList.add('hljs');
+    });
+};
+
+const highlightAllCodeBlocks = () => {
     hljs.highlightAll();
     addCopyButtons();
 };
 
-highlightCode();
+highlightAllCodeBlocks();
 
 llmSelect.addEventListener('change', () => {
     const selectedIndex = llmSelect.value;
@@ -140,7 +151,7 @@ clearHistory.addEventListener("click", () => {
 })
 
 prompt.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey && ask.innerText == "Ask" && !ask.disabled) {
+    if (event.key == "Enter" && !event.shiftKey && ask.innerText == "Ask" && !ask.disabled) {
         event.preventDefault();
         ask.click();
     }
@@ -171,23 +182,22 @@ window.addEventListener("message", (e) => {
     prevFile = file;
     maximumVal = parseInt(maxVal) || 0;
 
-    if (command === "response") {
+    if (command == "response") {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
-        highlightCode();
-    } else if (command === "selection") {
+        highlightNewCodeBlocks();
+    } else if (command == "selection") {
         responseArea.lastElementChild.querySelector('.response').innerText = text;
-    } else if (command === "loading") {
+    } else if (command == "loading") {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
-    } else if (command === "error") {
+    } else if (command == "error") {
         responseArea.lastElementChild.querySelector('.response').innerText = text;
     } else if (command == 'chat') {
         appendToChat(text, "");
     } else if (command == 'focus') {
         prompt.focus();
     } else if (command == 'content') {
-        content.innerHTML = text;
-        hljs.highlightAll();
-        addCancelButtons();
+        mentionedCode.innerHTML = text;
+        highlightMentionedCodeBlock();
     } else if (command == 'history') {
         if (value) responseArea.replaceChildren(responseArea.lastElementChild);
         else responseArea.replaceChildren();
