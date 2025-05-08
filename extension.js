@@ -261,7 +261,7 @@ const getNonce = () => {
  * @param {vscode.ExtensionContext} context
  */
 async function activate(context) {
-    let apiKey = context.globalState.get('aiChatApiKey');
+    let apiKey = await context.secrets.get('aiChatApiKey');
     if (!apiKey) {
         apiKey = await vscode.window.showInputBox({
             prompt: 'Enter your OpenRouter API key',
@@ -274,13 +274,14 @@ async function activate(context) {
             return;
         }
 
-        await context.globalState.update('aiChatApiKey', apiKey);
+        await context.secrets.store('aiChatApiKey', apiKey);
     }
 
-    const provider = new AIChatViewProvider(context.extensionUri, context);
+    const provider = new AIChatViewProvider(context.extensionUri, context, apiKey);
 
     const updateOpenAIClient = (key) => {
         if (provider) {
+            provider.apiKey = key;
             provider.openChat = new openai.OpenAI({
                 baseURL: "https://openrouter.ai/api/v1",
                 apiKey: key
@@ -296,7 +297,7 @@ async function activate(context) {
         });
 
         if (newApiKey) {
-            await context.globalState.update('aiChatApiKey', newApiKey);
+            await context.secrets.update('aiChatApiKey', newApiKey);
             updateOpenAIClient(newApiKey);
             vscode.window.showInformationMessage('OpenRouter API key updated successfully.');
         } else {
@@ -356,10 +357,10 @@ class AIChatViewProvider {
      * @param {string} _extensionUri
      * @param {vscode.ExtensionContext} context
      */
-    constructor(_extensionUri, context) {
+    constructor(_extensionUri, context, apiKey) {
         this._extensionUri = _extensionUri;
         this.context = context;
-        this.apiKey = context.globalState.get('aiChatApiKey');
+        this.apiKey = apiKey;
         this.regenHtml = 0;
         this.openChat = new openai.OpenAI({
             baseURL: "https://openrouter.ai/api/v1",

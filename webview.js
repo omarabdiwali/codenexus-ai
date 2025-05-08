@@ -12,7 +12,10 @@ let prevCommand = null;
 let prevFile = null;
 let maximumVal = 0;
 
-const highlightFilenameMentions = (text) => {
+const formatUserQuestion = (text) => {
+    text = DOMPurify.sanitize(text);
+    text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>');
+
     const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
     return text.replace(regEx, (match) => {
         return "<code>" + match + "</code>";
@@ -28,7 +31,7 @@ const copyButtons = (codeBlock) => {
     container.appendChild(codeBlock);
     button.innerText = 'Copy';
     button.classList.add('copy-button');
-;
+
     button.onclick = () => {
         const codeToCopy = codeBlock.textContent;
         vscode.postMessage({ command: 'copy', text: codeToCopy });
@@ -126,20 +129,20 @@ const validateInput = (n) => {
     return valid;
 }
 
-const appendToChat = (question, responseText) => {
+const appendToChat = (question) => {
     const chatEntry = document.createElement('div');
     chatEntry.classList.add('chat-entry');
 
     if (question.length > 0) {
         const questionDiv = document.createElement('div');
         questionDiv.classList.add('question');
-        questionDiv.innerHTML = '<strong>You: </strong>' + highlightFilenameMentions(question);
+        questionDiv.innerHTML = '<strong>You: </strong>' + formatUserQuestion(question);
         chatEntry.appendChild(questionDiv);
     }
 
     const responseDiv = document.createElement('div');
     responseDiv.classList.add('response');
-    responseDiv.innerHTML = responseText;
+    responseDiv.innerHTML = "";
     chatEntry.appendChild(responseDiv);
 
     responseArea.appendChild(chatEntry);
@@ -192,7 +195,7 @@ window.addEventListener("message", (e) => {
     } else if (command == "error") {
         responseArea.lastElementChild.querySelector('.response').innerText = text;
     } else if (command == 'chat') {
-        appendToChat(text, "");
+        appendToChat(text);
     } else if (command == 'focus') {
         prompt.focus();
     } else if (command == 'content') {
