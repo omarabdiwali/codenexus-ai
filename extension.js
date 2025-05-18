@@ -1,9 +1,20 @@
 const vscode = require('vscode');
 const openai = require('openai');
 const showdown = require('showdown');
-const fs = require("node:fs");
-const path = require('path');
 const { performance } = require("perf_hooks");
+
+const {
+    getFilePath,
+    sendToFile,
+    replaceFileMentions,
+    getLocationFromResponse,
+    highlightFilenameMentions,
+    getFileNames,
+    getTextFromFile,
+    getNonce,
+    addFileToPrompt,
+    mentionedFiles
+} = require("./functions");
 
 let questionsAndResponses = [];
 const userQuestions = [];
@@ -52,19 +63,6 @@ const llmNames = [
     "Gemma 3.0 (27b)"
 ];
 
-const sendToFile = (content, filename) => {
-    try {
-        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0) {
-            throw new Error('No workspace folder is open.');
-        }
-        const filePath = path.join(vscode.workspace.workspaceFolders[0].uri.path, `${filename}.md`).slice(1);
-        fs.writeFileSync(filePath, content, { flag: "a" });
-    } catch (err) {
-        console.error(err);
-        vscode.window.showErrorMessage('Failed to write to file: ' + err.message);
-    }
-};
-
 const sendStream = (panel, stream) => {
     if (writeToFile) {
         sendToFile(stream, outputFileName);
@@ -109,7 +107,7 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
         const totalResponse = `${currentResponse}\n\n**${runTime}**`;
 
         if (writeToFile) {
-            const pathToFile = path.join(vscode.workspace.workspaceFolders[0].uri.path, `${outputFileName}.md`).slice(1);
+            const pathToFile = getFilePath(outputFileName);
             const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile}**`;
             sendToFile(`\n\n**${runTime}**\n\n`, outputFileName);
 
@@ -157,104 +155,6 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
             await sendChat(panel, openChat, chat, index, count + 1, originalQuestion);
         }
     }
-};
-
-const replaceFileMentions = (question, files) => {
-    for (let file of files) {
-        question = question.replace(file, file.substring(1));
-    }
-    return question;
-};
-
-const getLocationFromResponse = (response, locations) => {
-    let index = Number(response);
-    let location = locations[index];
-    location = location.substring(location.indexOf(" ") + 1);
-    return location;
-};
-
-const addFileToPrompt = async (file, location) => {
-    if (duplicatedFiles.has(location)) return "";
-    duplicatedFiles.add(location);
-    const text = await getTextFromFile(location);
-    return file + ":\n" + text;
-};
-
-const highlightFilenameMentions = (text) => {
-    const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
-    return text.replace(regEx, (match) => {
-        return "<code>" + match + "</code>";
-    });
-};
-
-const getFileNames = (allFiles) => {
-    let fileTitles = {};
-    let titleRegEx = new RegExp("\\\\[[\\[\\]a-zA-Z]+\\.[a-zA-Z]+");
-
-    for (const file of allFiles) {
-        let path = file.path.substring(1);
-        path = path.replaceAll("/", "\\");
-        let matchedTitle = path.match(titleRegEx);
-        if (!matchedTitle) continue;
-        for (let title of matchedTitle) {
-            title = title.substring(1);
-            if (title in fileTitles) fileTitles[title].push(file.path);
-            else fileTitles[title] = [file.path];
-        }
-    }
-
-    return fileTitles;
-};
-
-const getTextFromFile = async (path) => {
-    const uri = vscode.Uri.file(path);
-    const text = await vscode.workspace.fs.readFile(uri);
-    return text;
-};
-
-const mentionedFiles = async (matches, titles) => {
-    let files = "";
-    let response = "";
-    let clearance = true;
-    let lastFile = null;
-    let fulfilled = [];
-
-    if (matches == null) return { response, clearance, match: lastFile, fulfilled, files };
-
-    for (let match of matches) {
-        let fileName = match.substring(1);
-        if (fileName in titles) {
-            if (titles[fileName].length > 1) {
-                lastFile = fileName;
-                response = `Which ${fileName} are you referring to:\n`;
-                clearance = false;
-                for (let i = 0; i < titles[fileName].length; i++) {
-                    response += `(${i + 1}) ${titles[fileName][i]}\n`;
-                }
-            } else {
-                let loc = titles[fileName][0];
-                if (duplicatedFiles.has(loc)) continue;
-                const text = await getTextFromFile(loc);
-
-                files += fileName + ":\n" + text + "\n\n";
-                fulfilled.push(match);
-                duplicatedFiles.add(loc);
-            }
-
-            if (!clearance) break;
-        }
-    }
-
-    return { response, clearance, fulfilled, files, match: lastFile };
-};
-
-const getNonce = () => {
-    let text = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
 };
 
 /**
@@ -445,14 +345,14 @@ class AIChatViewProvider {
                 if (message.context) {
                     let locations = previousResponse.split("\n");
                     let file = getLocationFromResponse(text, locations);
-                    const fileValue = await addFileToPrompt(message.file, file);
+                    const fileValue = await addFileToPrompt(message.file, file, duplicatedFiles);
                     textFromFile += fileValue + "\n";
                     text = replaceFileMentions(questionHistory.at(-1), ["@" + message.file]);
                     questionHistory[questionHistory.length - 1] = text;
                     matches = text.match(regEx);
                 }
 
-                let mentioned = await mentionedFiles(matches, fileTitles);
+                let mentioned = await mentionedFiles(matches, fileTitles, duplicatedFiles);
                 if (originalQuestion == "") originalQuestion = text;
                 text = replaceFileMentions(text, mentioned.fulfilled);
                 textFromFile += mentioned.files;

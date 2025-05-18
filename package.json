@@ -2,7 +2,7 @@
   "name": "ai-chat",
   "displayName": "ai-chat",
   "description": "An AI Chat using OpenRouter",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -35,7 +35,7 @@
           "type": "webview",
           "id": "ai-chat.chat",
           "name": "AI Chat",
-          "icon": "$(clear-all)",
+          "icon": "./resources/icon.svg",
           "contextualTitle": "AI Chat"
         }
       ]
