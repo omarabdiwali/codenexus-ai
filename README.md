@@ -2,9 +2,18 @@
 
 This VSCode extension allows the users to be able to ask multiple LLMs questions about their code. 
 
-It allows users to mention open files using `@filename.ext` in order for the LLM to be able to have access to that file, and answer the question based on the code. They are able to pick from 5 different LLMs, which are free, and switches between them if there is an error with the selected LLM. Also, it gives the user the ability to highlight part of a file, and use the keyboard shortcut `Ctrl+K` in order to open the extension and mention the highlighted text automatically.
+It allows users to mention open files using `@filename.ext` with custom autocomplete functionality, and answer the question based on the code. They are able to pick from 5 different LLMs, which are free, and switches between them if there is an error with the selected LLM. Also, it gives the user the ability to highlight part of a file, and use the keyboard shortcut `Ctrl+K` in order to open the extension and mention the highlighted text automatically.
 
 To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use the extension, you will need an OpenRouter API key, which the extension will ask for when you open it for the first time.
+
+![File Autocomplete](https://i.imgur.com/YMBbnTq.png)
+
+
+![Chat Response](https://i.imgur.com/2ceDKrR.png)
+
+
+![File Output](https://i.imgur.com/B1A80jY.png)
+
 
 ## Local Installation and Usage
 
@@ -24,6 +33,13 @@ To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use
   * We pass the function containing the implementation of the command as the second parameter to `registerCommand`.
 * `webview.js` - this file holds the code that handles the implementation of the chat panel.
   * The file has all the needed components and functions that is used by the webview panel, and handles the talking to `extension.js` using VSCode's postMessage.
+* `functions.js` - a utility file containing reusable functions for the extension. Provides functionality for:
+  * File path construction and validation (getFilePath, sendToFile)
+  * Text processing and replacement for file mentions (replaceFileMentions, highlightFilenameMentions)
+  * File content extraction and handling (getTextFromFile, addFileToPrompt, getFileNames)
+  * Error handling and user notification for file operations
+  * Nonce generation (getNonce)
+  * Resolving and prompting for ambiguous file references (mentionedFiles, getLocationFromResponse)
 * `styles.css`, `spinner.css` - these CSS files hold the styling for the webview panel, and the loading spinner.
 
 ## Get up and running straight away
