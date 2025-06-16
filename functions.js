@@ -4,8 +4,8 @@ const path = require('path');
 
 /** Constructs the file path for a given filename. */
 const getFilePath = (filename) => {
-    const filePath = path.join(vscode.workspace.workspaceFolders[0].uri.path, `${filename}.md`).slice(1);
-    return filePath;
+    const filePath = path.join(vscode.workspace.workspaceFolders[0].uri.path, `${filename}.md`);
+    return filePath.at(0) == '/' || filePath.at(0) == '\\' ? filePath.slice(1) : filePath;
 }
 
 /** Writes content to a file in the workspace. */

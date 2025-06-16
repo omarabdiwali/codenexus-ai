@@ -7,22 +7,18 @@ const {
     getFilePath,
     sendToFile,
     replaceFileMentions,
-    getLocationFromResponse,
     highlightFilenameMentions,
     getFileNames,
-    getTextFromFile,
     getNonce,
     addFileToPrompt,
-    mentionedFiles
 } = require("./functions");
 
-let questionsAndResponses = [];
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
 const duplicatedFiles = new Set();
 
-let originalQuestion = "";
+let questionsAndResponses = [];
 let previousResponse = "";
 let currentResponse = "";
 let textFromFile = "";
@@ -211,7 +207,6 @@ async function activate(context) {
             provider.handleIncomingData(data);
         } else {
             vscode.window.showWarningMessage("Chat view provider not available yet.");
-            await vscode.commands.executeCommand(`${AIChatViewProvider.viewType}.focus`);
         }
     })
 
@@ -242,10 +237,12 @@ async function activate(context) {
     fileWatcher.onDidCreate(async (uri) => {
         const allFiles = await vscode.workspace.findFiles(include, exclude);
         fileTitles = getFileNames(allFiles);
+        provider.updateFileList();
     });
     fileWatcher.onDidDelete(async (uri) => {
         const allFiles = await vscode.workspace.findFiles(include, exclude);
         fileTitles = getFileNames(allFiles);
+        provider.updateFileList();
     });
 }
 
@@ -281,6 +278,16 @@ class AIChatViewProvider {
         this._view.webview.postMessage({ command: 'focus' });
     }
 
+    updateFileList() {
+        if (this._view && this._view.webview) {
+            const notOpenFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
+            this._view.webview.postMessage({ command: 'fileTitles', value: fileTitles });
+            if (!notOpenFolder) {
+                this._view.webview.postMessage({ command: 'workspacePath', value: vscode.workspace.workspaceFolders[0].uri.path });
+            }
+        }
+    }
+
     loading() {
         if (this._view && this._view.webview) {
             this._view.webview.postMessage({ command: "loading", text: this._getSpinner() });
@@ -307,6 +314,7 @@ class AIChatViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview();
         webviewView.webview.postMessage({ command: 'focus' });
+        this.updateFileList();
 
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible) {
@@ -315,6 +323,7 @@ class AIChatViewProvider {
                     this.regenHtml = questionsAndResponses.length;
                 }
                 this._view.webview.postMessage({ command: 'focus' });
+                this.updateFileList();
             } else {
                 textFromFile = "";
             }
@@ -323,12 +332,10 @@ class AIChatViewProvider {
         webviewView.webview.onDidReceiveMessage(async (message) => {
             if (message.command == "chat") {
                 if (currenlyResponding) return;
+
                 let userQuestion = message.text;
-                if (!message.context) {
-                    userQuestions.push(userQuestion);
-                    questionHistory.push(userQuestion);
-                }
-                
+                userQuestions.push(userQuestion);
+                questionHistory.push(userQuestion);                
                 writeToFile = message.writeToFile;
                 outputFileName = message.outputFile ? message.outputFile : "output";
 
@@ -336,53 +343,29 @@ class AIChatViewProvider {
                     webviewView.webview.postMessage({ command: 'chat', text: userQuestion });
                 }
                 
-                if (!message.context && writeToFile) sendStream(webviewView, "## " + userQuestion + "\n\n");
+                if (writeToFile) sendStream(webviewView, "## " + userQuestion + "\n\n");
 
                 let text = message.text;
-                let regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
-                let matches = text.match(regEx);
+                let fileValue = "";
 
-                if (message.context) {
-                    let locations = previousResponse.split("\n");
-                    let file = getLocationFromResponse(text, locations);
-                    const fileValue = await addFileToPrompt(message.file, file, duplicatedFiles);
-                    textFromFile += fileValue + "\n";
-                    text = replaceFileMentions(questionHistory.at(-1), ["@" + message.file]);
-                    questionHistory[questionHistory.length - 1] = text;
-                    matches = text.match(regEx);
+                for (const [index, info] of Object.entries(message.mentionedFiles)) {
+                    const [file, location] = info;
+                    const value = await addFileToPrompt(file, location, duplicatedFiles);
+                    fileValue += value + '\n';
+                    text = replaceFileMentions(text, ["@" + file]);
                 }
 
-                let mentioned = await mentionedFiles(matches, fileTitles, duplicatedFiles);
-                if (originalQuestion == "") originalQuestion = text;
-                text = replaceFileMentions(text, mentioned.fulfilled);
-                textFromFile += mentioned.files;
-
-                if (!mentioned.clearance) {
-                    previousResponse = mentioned.response;
-                    if (webviewView && webviewView.webview) {
-                        webviewView.webview.postMessage(
-                            {
-                                command: "selection",
-                                text: mentioned.response,
-                                file: mentioned.match,
-                                maxVal: fileTitles[mentioned.match].length
-                            }
-                        );
-                    }
-                    return;
-                }
-
+                textFromFile += fileValue;
                 let question = `${text}\n\n${textFromFile}`;
                 this.loading();
                 
                 webviewView.webview.postMessage({ command: 'content', text: '' });
                 currenlyResponding = true;
                 webviewView.webview.postMessage({ command: 'disableAsk' });
-                await sendChat(webviewView, this.openChat, question, llmIndex, 0, originalQuestion);
+                await sendChat(webviewView, this.openChat, question, llmIndex, 0, userQuestion);
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
 
                 textFromFile = "";
-                originalQuestion = "";
                 duplicatedFiles.clear();
                 currenlyResponding = false;
             } else if (message.command === 'copy') {
@@ -445,7 +428,8 @@ class AIChatViewProvider {
           <body>
             <div id="chat-container">
                 <div id="input-area">
-                    <textarea id="prompt" rows="3" placeholder="Type your message here..."></textarea>
+                    <textarea id="prompt" rows="3" placeholder="Type your message here, with @file.ext to mention files, and using tab to select the correct one..."></textarea>
+                    <div tabindex='-1' id="file-options"></div>
                     <div class="options-container">
                         <div id="llmDropdown">
                             <label for="llmSelect">Select LLM:</label>

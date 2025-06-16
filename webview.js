@@ -7,16 +7,23 @@ const writeToFileCheckbox = document.getElementById("writeToFileCheckbox");
 const outputFileNameInput = document.getElementById("outputFileNameInput");
 const mentionedCode = document.getElementById("content");
 const clearHistory = document.getElementById('clear-history');
+const fileSearch = document.getElementById('file-options');
+const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
 
 let prevCommand = null;
 let prevFile = null;
+let prevPrompt = "";
+
+let baseWorkspacePath = null;
+let lastCursorPosition = 0;
 let maximumVal = 0;
+let fileTitlesWithLocations = {};
+let mentionedFiles = {};
 
 const formatUserQuestion = (text) => {
     text = DOMPurify.sanitize(text);
     text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>');
 
-    const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
     return text.replace(regEx, (match) => {
         return "<code>" + match + "</code>";
     });
@@ -110,25 +117,6 @@ const handleDisable = (e) => {
 
 writeToFileCheckbox.addEventListener('change', handleDisable);
 
-const validateInput = (n) => {
-    let invalid = new RegExp("[0-9]", "g");
-    let valid = "";
-    let curPos;
-
-    while ((curPos = invalid.exec(n)) != null) {
-        if (valid.length == 0 && curPos[0] == '0') {
-            continue;
-        } else {
-            let tempVal = valid + curPos[0];
-            if (parseInt(tempVal) <= maximumVal) {
-                valid = tempVal;
-            }
-        }
-    }
-
-    return valid;
-}
-
 const appendToChat = (question) => {
     const chatEntry = document.createElement('div');
     chatEntry.classList.add('chat-entry');
@@ -149,6 +137,138 @@ const appendToChat = (question) => {
     responseArea.scrollTop = responseArea.scrollHeight;
 }
 
+const findChangeStart = (oldStr, newStr) => {
+  const minLen = Math.min(oldStr.length, newStr.length);
+  for (let i = 0; i < minLen; i++) {
+    if (oldStr[i] !== newStr[i]) return i;
+  }
+  return minLen;
+}
+
+const shiftStartIndexes = (oldStr, newStr) => {
+    const diffStart = findChangeStart(oldStr, newStr);
+    const diffLength = newStr.length - oldStr.length;
+    let newMentionedFiles = {};
+
+    for (const [key, value] of Object.entries(mentionedFiles)) {
+        const oldIndex = parseInt(key);
+        let newIndex = oldIndex;
+        if (oldIndex >= diffStart) newIndex = oldIndex + diffLength;
+        if (newIndex < 0) continue;
+        newMentionedFiles[newIndex] = value;
+    }
+
+    prevPrompt = newStr;
+    return newMentionedFiles;
+}
+
+const verifyMentionedFiles = (value) => {
+    let match;
+    let verified = {};
+    
+    while ((match = regEx.exec(value)) != null) {
+        const key = match.index;
+        if (key in mentionedFiles) {
+            verified[key] = mentionedFiles[key];
+            continue;
+        }
+        const fileName = match[0].substring(1);
+        if (fileName in fileTitlesWithLocations) {
+            verified[key] = [fileName, fileTitlesWithLocations[fileName][0]];
+        }
+    }
+
+    mentionedFiles = verified;
+}
+
+const startAndEndIndexForCursorWord = (value, start) => {
+    let startIndex = value.substring(0, start).lastIndexOf(' ');
+    let endIndex = value.substring(start).indexOf(' ');
+    startIndex = startIndex == -1 ? 0 : startIndex + 1;
+    endIndex = endIndex == -1 ? value.length : endIndex + start;
+    return [startIndex, endIndex];
+}
+
+const findCurrentCursorWord = (value, start) => {
+    lastCursorPosition = start;
+    const [startIndex, endIndex] = startAndEndIndexForCursorWord(value, start);
+    return value.substring(startIndex, endIndex);
+}
+
+const replaceCursorWord = (start, fileInfo) => {
+    const value = prompt.value;
+    const [word, location] = fileInfo;
+    const [startIndex, endIndex] = startAndEndIndexForCursorWord(value, start);
+    
+    const previousCursorWord = value.substring(startIndex, endIndex);
+    const addWord = value.substring(0, startIndex+1) + word;
+    const cursorPosition = addWord.length;
+    
+    prompt.value = addWord + value.substring(endIndex);
+    prompt.focus();
+    prompt.setSelectionRange(cursorPosition, cursorPosition);
+    
+    mentionedFiles[startIndex] = [word, location];
+    fileSearch.replaceChildren();
+    fileSearch.style.display = 'none';
+}
+
+const createSearchItem = (file, value) => {
+    if (!baseWorkspacePath) return;
+    const item = document.createElement('div');
+    const location = value.substring(baseWorkspacePath.length + 1);
+
+    item.classList.add('search-item');
+    item.innerHTML = `<b>${file}</b>: (<i>${location}</i>)`;
+    item.tabIndex = "0"
+    item.addEventListener('mouseover', (event) => {
+        item.style.background = 'var(--vscode-input-background)';
+    })
+    item.addEventListener('mouseleave', (event) => {
+        item.style.background = null;
+    })
+    item.addEventListener('click', (event) => {
+        replaceCursorWord(lastCursorPosition, [file, value]);
+    })
+    item.addEventListener('keydown', (event) => {
+        if (event.key == 'Enter') {
+            event.preventDefault();
+            replaceCursorWord(lastCursorPosition, [file, value]);
+        }
+    })
+    return item;
+}
+
+const showFileOptions = (word) => {
+    fileSearch.replaceChildren();
+    if (!word || word.at(0) != '@') {
+        fileSearch.style.display = 'none';
+        return;
+    }
+
+    const file = word.substring(1).trim();
+    const options = [];
+    for (const key of Object.keys(fileTitlesWithLocations)) {
+        if (file && key.startsWith(file)) {
+            options.push([key, fileTitlesWithLocations[key]]);
+        }
+    }
+
+    if (!file || options.length == 0) {
+        fileSearch.style.display = 'none';
+        return;
+    }
+
+    for (const [fileName, locations] of options) {
+        for (const loc of locations) {
+            const row = createSearchItem(fileName, loc);
+            fileSearch.appendChild(row);
+        }
+    }
+
+    fileSearch.style.display = 'flex';
+}
+
 clearHistory.addEventListener("click", () => {
     vscode.postMessage({ command: 'clearHistory' });
 })
@@ -161,35 +281,35 @@ prompt.addEventListener("keydown", (event) => {
 })
 
 prompt.addEventListener("input", (event) => {
-    if (prevCommand == "selection") {
-        event.preventDefault();
-        prompt.value = validateInput(prompt.value);
-    }
+    mentionedFiles = shiftStartIndexes(prevPrompt, prompt.value);
+    let cursorWord = findCurrentCursorWord(event.target.value, event.target.selectionStart);
+    showFileOptions(cursorWord);
 });
+
+prompt.addEventListener("click", (event) => {
+    let cursorWord = findCurrentCursorWord(event.target.value, event.target.selectionStart);
+    showFileOptions(cursorWord);
+})
 
 ask.addEventListener("click", () => {
     if (ask.innerText == "Ask") {
         const text = prompt.value.trim();
-        const context = prevCommand == "selection";
         if (text.length == 0) return;
         prompt.value = "";
-        vscode.postMessage({ command: 'chat', text, context, file: prevFile, writeToFile: writeToFileCheckbox.checked, outputFile: outputFileNameInput.value });
+        verifyMentionedFiles(text);
+        vscode.postMessage({ command: 'chat', mentionedFiles, text, writeToFile: writeToFileCheckbox.checked, outputFile: outputFileNameInput.value });
+        mentionedFiles = {};
     } else {
         vscode.postMessage({ command: "stopResponse" });
     }
 });
 
 window.addEventListener("message", (e) => {
-    const { command, text, file, maxVal, question, value } = e.data;
-    prevCommand = command;
-    prevFile = file;
-    maximumVal = parseInt(maxVal) || 0;
+    const { command, text, value } = e.data;
 
     if (command == "response") {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
         highlightNewCodeBlocks();
-    } else if (command == "selection") {
-        responseArea.lastElementChild.querySelector('.response').innerText = text;
     } else if (command == "loading") {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
     } else if (command == "error") {
@@ -216,5 +336,9 @@ window.addEventListener("message", (e) => {
         }
     } else if (command == 'disableAsk') {
         ask.disabled = true;
+    } else if (command == 'fileTitles') {
+        fileTitlesWithLocations = value;
+    } else if (command == 'workspacePath') {
+        baseWorkspacePath = value;
     }
 });

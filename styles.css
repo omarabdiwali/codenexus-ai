@@ -204,3 +204,21 @@ pre code.hljs {
 .cancel-response:hover {
     background-color: rgba(0, 0, 0, 0.4);
 }
+#file-options {
+    display: none;
+    flex-direction: column;
+    background-color: rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    margin-bottom: 10px;
+    max-height: 30vh;
+}
+.search-item {
+    flex: 1;
+    padding: 5px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.search-item:focus {
+    outline: none;
+    background: var(--vscode-input-background);
+}
