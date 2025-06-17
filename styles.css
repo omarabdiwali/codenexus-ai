@@ -222,3 +222,6 @@ pre code.hljs {
     outline: none;
     background: var(--vscode-input-background);
 }
+html {
+    scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
+}
