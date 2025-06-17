@@ -113,6 +113,7 @@ outputFileNameInput.addEventListener("input", (e) => {
 const handleDisable = (e) => {
     e.preventDefault();
     outputFileNameInput.disabled = !writeToFileCheckbox.checked;
+    vscode.postMessage({ command: 'outputToFile', checked: writeToFileCheckbox.checked });
 };
 
 writeToFileCheckbox.addEventListener('change', handleDisable);

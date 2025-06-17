@@ -259,6 +259,7 @@ class AIChatViewProvider {
         this.context = context;
         this.apiKey = apiKey;
         this.regenHtml = 0;
+        this.prevWrite = false;
         this.openChat = new openai.OpenAI({
             baseURL: "https://openrouter.ai/api/v1",
             apiKey: this.apiKey
@@ -318,9 +319,10 @@ class AIChatViewProvider {
 
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible) {
-                if (this.regenHtml != questionsAndResponses.length) {
+                if (this.prevWrite != writeToFile || this.regenHtml != questionsAndResponses.length) {
                     webviewView.webview.html = this._getHtmlForWebview();
                     this.regenHtml = questionsAndResponses.length;
+                    this.prevWrite = writeToFile;
                 }
                 this._view.webview.postMessage({ command: 'focus' });
                 this.updateFileList();
@@ -380,6 +382,8 @@ class AIChatViewProvider {
             } else if (message.command === 'stopResponse') {
                 continueResponse = false;
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
+            } else if (message.command === 'outputToFile') {
+                writeToFile = message.checked;
             }
         });
     }
