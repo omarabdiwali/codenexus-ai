@@ -30,14 +30,6 @@ const replaceFileMentions = (question, files) => {
     return question;
 };
 
-/** Extracts file location from a response. */
-const getLocationFromResponse = (response, locations) => {
-    let index = Number(response);
-    let location = locations[index];
-    location = location.substring(location.indexOf(" ") + 1);
-    return location;
-};
-
 /** Highlights filename mentions in text. */
 const highlightFilenameMentions = (text) => {
     const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
@@ -89,51 +81,58 @@ const addFileToPrompt = async (file, location, duplicatedFiles) => {
     return file + ":\n" + text;
 };
 
-/** Handles mentioned files in a response. */
-const mentionedFiles = async (matches, titles, duplicatedFiles) => {
-    let files = "";
-    let response = "";
-    let clearance = true;
-    let lastFile = null;
-    let fulfilled = [];
+class LRUCache {
+  constructor(capacity) {
+    this.cache = new Map();
+    this.capacity = capacity;
+  }
 
-    if (matches == null) return { response, clearance, match: lastFile, fulfilled, files };
+  get(key) {
+    if (!this.cache.has(key)) return -1;
+    let val = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, val);
+    return val;
+  }
 
-    for (let match of matches) {
-        let fileName = match.substring(1);
-        if (fileName in titles) {
-            if (titles[fileName].length > 1) {
-                lastFile = fileName;
-                response = `Which ${fileName} are you referring to:\n`;
-                clearance = false;
-                for (let i = 0; i < titles[fileName].length; i++) {
-                    response += `(${i + 1}) ${titles[fileName][i]}\n`;
-                }
-            } else {
-                let loc = titles[fileName][0];
-                if (duplicatedFiles.has(loc)) continue;
-                const text = await getTextFromFile(loc);
-                files += fileName + ":\n" + text + "\n\n";
-                fulfilled.push(match);
-                duplicatedFiles.add(loc);
-            }
+  put(key, value) {
+    this.cache.delete(key);
+    if (this.cache.size === this.capacity) {
+      this.cache.delete(this.cache.keys().next().value);
+      this.cache.set(key, value);
+    } else {
+      this.cache.set(key, value);
+    }
+  }
 
-            if (!clearance) break;
-        }
+  delete(key) {
+    this.cache.delete(key);
+    this.capacity += 1;
+  }
+
+  size() {
+    return this.cache.size;
+  }
+
+  async getTextFile() {
+    let textFromFiles = "Files mentioned in order from newest to oldest:\n\n";
+    
+    for (const [location, fileName] of Array.from(this.cache).reverse()) {
+      const fileText = await getTextFromFile(location);
+      textFromFiles += `${fileName}:\n${fileText}`
     }
 
-    return { response, clearance, fulfilled, files, match: lastFile };
-};
+    return textFromFiles;
+  }
+}
 
 module.exports = {
     getFilePath,
     sendToFile,
     replaceFileMentions,
-    getLocationFromResponse,
     highlightFilenameMentions,
     getFileNames,
-    getTextFromFile,
     getNonce,
     addFileToPrompt,
-    mentionedFiles
+    LRUCache
 }

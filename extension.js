@@ -11,12 +11,14 @@ const {
     getFileNames,
     getNonce,
     addFileToPrompt,
+    LRUCache
 } = require("./functions");
 
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
 const duplicatedFiles = new Set();
+const fileHistory = new LRUCache(3);
 
 let questionsAndResponses = [];
 let previousResponse = "";
@@ -38,7 +40,7 @@ const deepseek = "deepseek/deepseek-chat:free";
 const gemma = "google/gemini-2.0-flash-exp:free";
 const qwen = "qwen/qwen3-235b-a22b:free";
 const gemma3 = "google/gemma-3-27b-it:free";
-const nvidia = "nvidia/llama-3.1-nemotron-ultra-253b-v1:free";
+const nvidia = "nvidia/llama-3.3-nemotron-super-49b-v1:free";
 const llama = "meta-llama/llama-4-maverick:free";
 
 const llms = [
@@ -51,7 +53,7 @@ const llms = [
 ];
 
 const llmNames = [
-    "Llama 3.1 Nemotron",
+    "Llama 3.3 Nemotron",
     "Llama 4 Maverick",
     "Qwen3",
     "Deepseek V3",
@@ -67,7 +69,39 @@ const sendStream = (panel, stream) => {
     }
 };
 
-const sendChat = async (panel, openChat, chat, index, count, originalQuestion) => {
+const generateMessages = async (chat) => {
+    const messages = [];
+    
+    if (fileHistory.size() > 0) {
+        const files = await fileHistory.getTextFile();
+        messages.push({
+            role: 'user',
+            content: files
+        })
+    }
+
+    for (const {question, response} of questionsAndResponses.slice(-5)) {
+        const systemResponse = response.substring(0, response.lastIndexOf('\n'));
+
+        messages.push({
+            role: 'user',
+            content: question
+        })
+        messages.push({
+            role: 'assistant',
+            content: systemResponse
+        })
+    }
+
+    messages.push({
+        role: 'user',
+        content: chat
+    })
+
+    return messages;
+}
+
+const sendChat = async (panel, messages, openChat, chat, index, count, originalQuestion) => {
     const startTime = performance.now();
     let sendMessage = true;
     currentResponse = "";
@@ -76,12 +110,7 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
         const stream = await openChat.chat.completions.create({
             model: llms[index],
             stream: true,
-            messages: [
-                {
-                    role: "user",
-                    content: chat
-                }
-            ]
+            messages
         });
 
         for await (const chunk of stream) {
@@ -148,7 +177,7 @@ const sendChat = async (panel, openChat, chat, index, count, originalQuestion) =
         } else {
             index += 1;
             index %= llms.length;
-            await sendChat(panel, openChat, chat, index, count + 1, originalQuestion);
+            await sendChat(panel, messages, openChat, chat, index, count + 1, originalQuestion);
         }
     }
 };
@@ -193,7 +222,7 @@ async function activate(context) {
         });
 
         if (newApiKey) {
-            await context.secrets.update('aiChatApiKey', newApiKey);
+            await context.secrets.store('aiChatApiKey', newApiKey);
             updateOpenAIClient(newApiKey);
             vscode.window.showInformationMessage('OpenRouter API key updated successfully.');
         } else {
@@ -324,8 +353,9 @@ class AIChatViewProvider {
                     this.regenHtml = questionsAndResponses.length;
                     this.prevWrite = writeToFile;
                 }
-                this._view.webview.postMessage({ command: 'focus' });
                 this.updateFileList();
+                this._view.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache).reverse() })
+                this._view.webview.postMessage({ command: 'focus' });
             } else {
                 textFromFile = "";
             }
@@ -348,27 +378,23 @@ class AIChatViewProvider {
                 if (writeToFile) sendStream(webviewView, "## " + userQuestion + "\n\n");
 
                 let text = message.text;
-                let fileValue = "";
-
                 for (const [index, info] of Object.entries(message.mentionedFiles)) {
                     const [file, location] = info;
-                    const value = await addFileToPrompt(file, location, duplicatedFiles);
-                    fileValue += value + '\n';
+                    fileHistory.put(location, file);
                     text = replaceFileMentions(text, ["@" + file]);
                 }
 
-                textFromFile += fileValue;
-                let question = `${text}\n\n${textFromFile}`;
+                const messages = await generateMessages(text);
                 this.loading();
                 
                 webviewView.webview.postMessage({ command: 'content', text: '' });
+                webviewView.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache).reverse() });
                 currenlyResponding = true;
-                webviewView.webview.postMessage({ command: 'disableAsk' });
-                await sendChat(webviewView, this.openChat, question, llmIndex, 0, userQuestion);
-                webviewView.webview.postMessage({ command: 'cancelView', value: false });
 
-                textFromFile = "";
-                duplicatedFiles.clear();
+                webviewView.webview.postMessage({ command: 'disableAsk' });
+                await sendChat(webviewView, messages, this.openChat, text, llmIndex, 0, userQuestion);
+                webviewView.webview.postMessage({ command: 'cancelView', value: false });
+                
                 currenlyResponding = false;
             } else if (message.command === 'copy') {
                 vscode.env.clipboard.writeText(message.text);
@@ -384,6 +410,8 @@ class AIChatViewProvider {
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
             } else if (message.command === 'outputToFile') {
                 writeToFile = message.checked;
+            } else if (message.command === 'fileContext') {
+                fileHistory.delete(message.key);
             }
         });
     }
@@ -432,6 +460,7 @@ class AIChatViewProvider {
           <body>
             <div id="chat-container">
                 <div id="input-area">
+                    <div id="context-files"></div>
                     <textarea id="prompt" rows="3" placeholder="Type your message here, with @file.ext to mention files, and using tab to select the correct one..."></textarea>
                     <div tabindex='-1' id="file-options"></div>
                     <div class="options-container">

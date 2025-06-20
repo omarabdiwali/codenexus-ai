@@ -8,17 +8,87 @@ const outputFileNameInput = document.getElementById("outputFileNameInput");
 const mentionedCode = document.getElementById("content");
 const clearHistory = document.getElementById('clear-history');
 const fileSearch = document.getElementById('file-options');
+const contextFiles = document.getElementById('context-files');
 const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
+const maxFiles = 3;
 
-let prevCommand = null;
-let prevFile = null;
 let prevPrompt = "";
-
 let baseWorkspacePath = null;
 let lastCursorPosition = 0;
 let maximumVal = 0;
 let fileTitlesWithLocations = {};
 let mentionedFiles = {};
+let contextedFilesStorage = [];
+
+const createNumberOfFiles = (fileCount) => {
+    const files = document.createElement('div');
+    files.id = 'file-number'
+    files.innerText = `${fileCount}/${maxFiles}`
+    if (fileCount == maxFiles) {
+        files.style.opacity = '60%';
+    }
+    return files;
+}
+
+const replaceContextFileCount = (size) => {
+    const newCount = createNumberOfFiles(size);
+    const oldCount = contextFiles.lastElementChild;
+    contextFiles.replaceChild(newCount, oldCount);
+}
+
+const removeDeletedContext = (location) => {
+    const index = contextedFilesStorage.findIndex((val) => val[0] == location);
+    contextedFilesStorage.splice(index, 1);
+    vscode.postMessage({ command: 'fileContext', key: location });
+    if (contextedFilesStorage.length == 0) contextFiles.style.display = 'none';
+    replaceContextFileCount(contextedFilesStorage.length);
+}
+
+const createContextedFileElement = (fileName, location) => {
+    if (!baseWorkspacePath) return false;
+
+    const relativeLocation = location.substring(baseWorkspacePath.length + 1);
+    const main = document.createElement('div');
+    const name = document.createElement('div');
+    const cancel = document.createElement('button');
+
+    main.id = 'file-mention';
+    name.id = 'name';
+    cancel.classList.add('close-button');
+
+    main.key = location;
+    main.title = relativeLocation;
+    name.innerText = fileName;
+    cancel.innerText = 'x';
+    cancel.style.paddingLeft = '7px';
+
+    cancel.addEventListener('click', (e) => {
+        main.remove();
+        removeDeletedContext(location);
+    })
+
+    main.appendChild(name);
+    main.appendChild(cancel);
+    contextFiles.appendChild(main);
+    return true;
+}
+
+const addContextedFiles = () => {
+    contextFiles.replaceChildren();
+    let fileCount = 0;
+
+    for (const [location, fileName] of contextedFilesStorage) {
+        if (createContextedFileElement(fileName, location)) fileCount += 1;
+    }
+
+    if (fileCount == 0) {
+        contextFiles.style.display = 'none';
+    } else {
+        const files = createNumberOfFiles(fileCount);
+        contextFiles.appendChild(files);
+        contextFiles.style.display = 'flex';
+    }
+}
 
 const formatUserQuestion = (text) => {
     text = DOMPurify.sanitize(text);
@@ -341,5 +411,8 @@ window.addEventListener("message", (e) => {
         fileTitlesWithLocations = value;
     } else if (command == 'workspacePath') {
         baseWorkspacePath = value;
+    } else if (command == 'fileContext') {
+        contextedFilesStorage = value;
+        addContextedFiles();
     }
 });
