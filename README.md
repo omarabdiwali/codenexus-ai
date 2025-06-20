@@ -14,7 +14,7 @@ To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use
 ![Chat Response](https://i.imgur.com/dvrPqxq.png)
 
 
-![File Output](https://i.imgur.com/B1A80jY.png)
+![File Output](https://i.imgur.com/vCAcPX5.png)
 
 
 ## Local Installation and Usage
