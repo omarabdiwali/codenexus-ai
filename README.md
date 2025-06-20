@@ -11,7 +11,7 @@ To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use
 ![File Autocomplete](https://i.imgur.com/YMBbnTq.png)
 
 
-![Chat Response](https://i.imgur.com/2OWcOgO.png)
+![Chat Response](https://i.imgur.com/dvrPqxq.png)
 
 
 ![File Output](https://i.imgur.com/B1A80jY.png)
