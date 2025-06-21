@@ -41,7 +41,7 @@ To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use
   * File content extraction and handling (addFileToPrompt, getFileNames)
   * Error handling and user notification for file operations
   * Nonce generation (getNonce)
-  * An LRU Cache class used to limit the number of retained files (LRUCache)
+  * A LRU Cache class used to limit the number of retained files (LRUCache)
 * `styles.css`, `spinner.css` - these CSS files hold the styling for the webview panel, and the loading spinner.
 
 ## Get up and running straight away

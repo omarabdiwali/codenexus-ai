@@ -69,7 +69,7 @@ const sendStream = (panel, stream) => {
     }
 };
 
-const generateMessages = async (chat) => {
+const generateMessages = async (chat, mentionedCode) => {
     const messages = [];
     
     if (fileHistory.size() > 0) {
@@ -95,7 +95,7 @@ const generateMessages = async (chat) => {
 
     messages.push({
         role: 'user',
-        content: chat
+        content: mentionedCode.length > 0 ? chat + '\n\n' + mentionedCode : chat
     })
 
     return messages;
@@ -384,7 +384,8 @@ class AIChatViewProvider {
                     text = replaceFileMentions(text, ["@" + file]);
                 }
 
-                const messages = await generateMessages(text);
+                const messages = await generateMessages(text, textFromFile);
+                textFromFile = "";
                 this.loading();
                 
                 webviewView.webview.postMessage({ command: 'content', text: '' });
