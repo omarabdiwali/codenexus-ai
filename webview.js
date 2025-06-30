@@ -10,7 +10,7 @@ const clearHistory = document.getElementById('clear-history');
 const fileSearch = document.getElementById('file-options');
 const contextFiles = document.getElementById('context-files');
 const llmMode = document.getElementById('mode-select')
-const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
+const regEx = new RegExp(/[\b\@][\w\.]*\.[a-zA-Z]+\b/g);
 const maxFiles = 3;
 
 let prevPrompt = "";
@@ -99,6 +99,8 @@ const formatUserQuestion = (text) => {
     text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>');
 
     return text.replace(regEx, (match) => {
+        const title = match.substring(1);
+        if (!(title in fileTitlesWithLocations)) return match;
         return "<code>" + match + "</code>";
     });
 };

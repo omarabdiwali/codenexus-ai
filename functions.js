@@ -33,9 +33,11 @@ const replaceFileMentions = (question, files) => {
 };
 
 /** Highlights filename mentions in text. */
-const highlightFilenameMentions = (text) => {
-    const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
+const highlightFilenameMentions = (text, fileTitles) => {
+    const regEx = new RegExp(/[\b\@][\w\.]*\.[a-zA-Z]+\b/g);
     return text.replace(regEx, (match) => {
+        const title = match.substring(1);
+        if (!(title in fileTitles)) return match;
         return "<code>" + match + "</code>";
     });
 };
@@ -43,17 +45,11 @@ const highlightFilenameMentions = (text) => {
 /** Extracts file titles from a list of files. */
 const getFileNames = (allFiles) => {
     let fileTitles = {};
-    let titleRegEx = new RegExp("\\\\[[\\[\\]a-zA-Z]+\\.[a-zA-Z]+");
     for (const file of allFiles) {
-        let path = file.path.substring(1);
-        path = path.replaceAll("/", "\\");
-        let matchedTitle = path.match(titleRegEx);
-        if (!matchedTitle) continue;
-        for (let title of matchedTitle) {
-            title = title.substring(1);
-            if (title in fileTitles) fileTitles[title].push(file.path);
-            else fileTitles[title] = [file.path];
-        }
+        let title = path.basename(file.path);
+        if (!title) continue;
+        if (title in fileTitles) fileTitles[title].push(file.path);
+        else fileTitles[title] = [file.path];
     }
     return fileTitles;
 };
