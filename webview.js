@@ -9,6 +9,7 @@ const mentionedCode = document.getElementById("content");
 const clearHistory = document.getElementById('clear-history');
 const fileSearch = document.getElementById('file-options');
 const contextFiles = document.getElementById('context-files');
+const llmMode = document.getElementById('mode-select')
 const regEx = new RegExp("\\B\\@[\\[\\]a-zA-Z]+\\.[a-zA-Z]+", "g");
 const maxFiles = 3;
 
@@ -19,6 +20,9 @@ let maximumVal = 0;
 let fileTitlesWithLocations = {};
 let mentionedFiles = {};
 let contextedFilesStorage = [];
+let queue = [];
+let lastMatching = 0;
+let alreadyMatched = {};
 
 const createNumberOfFiles = (fileCount) => {
     const files = document.createElement('div');
@@ -99,24 +103,62 @@ const formatUserQuestion = (text) => {
     });
 };
 
-const copyButtons = (codeBlock) => {
-    const container = document.createElement('div');
-    const button = document.createElement('button');
+const generateRunButton = (key) => {
+    const runButton = document.createElement('button');
+    runButton.innerText = 'Run';
+    runButton.classList.add('interactive-button');
 
-    container.classList.add('code-container');
-    codeBlock.parentNode.insertBefore(container, codeBlock);
-    container.appendChild(codeBlock);
-    button.innerText = 'Copy';
-    button.classList.add('copy-button');
-
-    button.onclick = () => {
-        const codeToCopy = codeBlock.textContent;
-        vscode.postMessage({ command: 'copy', text: codeToCopy });
-        button.innerText = 'Copied!';
-        setTimeout(() => button.innerText = 'Copy', 2000);
+    runButton.onclick = () => {
+        vscode.postMessage({ command: "runProgram", key });
+        runButton.disabled = true;
     };
 
-    container.appendChild(button);
+    return runButton;
+}
+
+const generateCopyButton = (text) => {
+    const copyButton = document.createElement('button');
+    copyButton.innerText = 'Copy';
+    copyButton.classList.add('interactive-button');
+
+    copyButton.onclick = () => {
+        vscode.postMessage({ command: 'copy', text });
+        copyButton.innerText = 'Copied!';
+        setTimeout(() => copyButton.innerText = 'Copy', 2000);
+    };
+
+    return copyButton;
+}
+
+const generateButtons = (codeBlock, currentTime) => {
+    const container = document.createElement('div');
+    const buttonDiv = document.createElement('div');
+    const copyButton = generateCopyButton(codeBlock.textContent);
+
+    container.classList.add('code-container');
+    buttonDiv.classList.add('code-container-buttons');
+    codeBlock.parentNode.insertBefore(container, codeBlock);
+    container.appendChild(codeBlock);
+
+    buttonDiv.appendChild(copyButton);
+    const codeKey = codeBlock.textContent.trim();
+
+    if (currentTime != null && currentTime - lastMatching > 1000 && !(codeKey in alreadyMatched)) {
+        lastMatching = currentTime;
+        for (const [key, value] of queue) {
+            if (comapreCodeBlock(codeBlock.textContent.trim(), value.trim())) {
+                const runButton = generateRunButton(key);
+                buttonDiv.appendChild(runButton);
+                alreadyMatched[codeKey] = key;
+                break;
+            }
+        }
+    } else if (codeKey in alreadyMatched) {
+        const runButton = generateRunButton(alreadyMatched[codeKey]);
+        buttonDiv.appendChild(runButton);
+    }
+
+    container.appendChild(buttonDiv);
 };
 
 const cancelButtons = (codeBlock) => {
@@ -141,15 +183,15 @@ const cancelButtons = (codeBlock) => {
 
 const addCopyButtons = () => {
     document.querySelectorAll("#chat-history pre code").forEach(codeBlock => {
-        copyButtons(codeBlock);
+        generateButtons(codeBlock, null);
     });
 };
 
-const highlightNewCodeBlocks = () => {
+const highlightNewCodeBlocks = (currentTime = Date.now()) => {
     const newCodeBlocks = document.querySelectorAll("#chat-history pre code:not(.hljs)");
     newCodeBlocks.forEach(codeBlock => {
         hljs.highlightElement(codeBlock);
-        copyButtons(codeBlock);
+        generateButtons(codeBlock, currentTime);
         codeBlock.classList.add('hljs');
     });
 };
@@ -173,6 +215,10 @@ llmSelect.addEventListener('change', () => {
     const selectedIndex = llmSelect.value;
     vscode.postMessage({ command: 'selectLLM', index: selectedIndex });
 });
+
+llmMode.addEventListener('change', (e) => {
+    vscode.postMessage({ command: 'changeMode', value: llmMode.value });
+})
 
 outputFileNameInput.addEventListener("input", (e) => {
     let val = e.target.value;
@@ -300,11 +346,12 @@ const createSearchItem = (file, value) => {
     })
     item.addEventListener('click', (event) => {
         replaceCursorWord(lastCursorPosition, [file, value]);
+        vscode.postMessage({ command: 'updatePrompt', value: prompt.value, files: mentionedFiles });
     })
     item.addEventListener('keydown', (event) => {
         if (event.key == 'Enter') {
             event.preventDefault();
-            replaceCursorWord(lastCursorPosition, [file, value]);
+            item.click();
         }
     })
     return item;
@@ -340,6 +387,56 @@ const showFileOptions = (word) => {
     fileSearch.style.display = 'flex';
 }
 
+const levenDist = (a, b) => {
+    const tmp = [];
+    let i, j, alen = a.length, blen = b.length, score, alen1 = alen + 1, blen1 = blen + 1;
+
+    for (i = 0; i < alen1; i++) {
+        tmp[i] = [i];
+    }
+    for (j = 0; j < blen1; j++) {
+        tmp[0][j] = j;
+    }
+
+    for (i = 1; i < alen1; i++) {
+        for (j = 1; j < blen1; j++) {
+            score = (a[i - 1] === b[j - 1]) ? 0 : 1;
+            tmp[i][j] = Math.min(tmp[i - 1][j] + 1, tmp[i][j - 1] + 1, tmp[i - 1][j - 1] + score);
+        }
+    }
+    return tmp[alen][blen];
+}
+
+const normalizeString = (str) => {
+  return str
+    .replace(/\s+/g, ' ')
+    .replace(/^\s+|\s+$/g, '')
+    .replace(/\r\n|\r/g, '\n');
+}
+
+const escapeString = (str) => {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t');
+}
+
+const comapreCodeBlock = (codeBlock, value) => {
+    const normCode = escapeString(normalizeString(codeBlock));
+    const normValue = escapeString(normalizeString(value));
+
+    const distance = levenDist(normCode, normValue);
+    const maxLength = Math.max(normCode.length, normValue.length);
+    const similarity = (1 - distance / maxLength);
+
+    // console.log(normCode);
+    // console.log(normValue);
+    console.log("Similarity:", similarity);
+    return similarity >= 0.9;
+}
+
 clearHistory.addEventListener("click", () => {
     vscode.postMessage({ command: 'clearHistory' });
 })
@@ -348,6 +445,8 @@ prompt.addEventListener("keydown", (event) => {
     if (event.key == "Enter" && !event.shiftKey && ask.innerText == "Ask" && !ask.disabled) {
         event.preventDefault();
         ask.click();
+    } else if (event.code == "Backspace") {
+        verifyMentionedFiles();
     }
 })
 
@@ -355,6 +454,7 @@ prompt.addEventListener("input", (event) => {
     mentionedFiles = shiftStartIndexes(prevPrompt, prompt.value);
     let cursorWord = findCurrentCursorWord(event.target.value, event.target.selectionStart);
     showFileOptions(cursorWord);
+    vscode.postMessage({ command: 'updatePrompt', value: prompt.value, files: mentionedFiles });
 });
 
 prompt.addEventListener("click", (event) => {
@@ -379,8 +479,10 @@ window.addEventListener("message", (e) => {
     const { command, text, value } = e.data;
 
     if (command == "response") {
+        // text = text.replaceAll('!@!@!@!', "");
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
-        highlightNewCodeBlocks();
+        if (value) highlightNewCodeBlocks(lastMatching + 5000);
+        else highlightNewCodeBlocks();
     } else if (command == "loading") {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
     } else if (command == "error") {
@@ -404,6 +506,9 @@ window.addEventListener("message", (e) => {
             ask.classList.replace("cancel-response", "ask-chat");
             ask.innerText = "Ask";
             ask.disabled = false;
+            queue = [];
+            lastMatching = 0;
+            alreadyMatched = {};
         }
     } else if (command == 'disableAsk') {
         ask.disabled = true;
@@ -414,5 +519,16 @@ window.addEventListener("message", (e) => {
     } else if (command == 'fileContext') {
         contextedFilesStorage = value;
         addContextedFiles();
+    } else if (command == 'pythonProg') {
+        queue.push([value, text]);
+    } else if (command == 'promptValue') {
+        prompt.value = text;
+        mentionedFiles = value;
+    } else if (command == 'updateValues') {
+        const [toFile, agent, index] = value;
+        writeToFileCheckbox.checked = toFile;
+        outputFileNameInput.disabled = !writeToFileCheckbox.checked;
+        llmMode.value = `${agent}`;
+        llmSelect.value = index;
     }
 });

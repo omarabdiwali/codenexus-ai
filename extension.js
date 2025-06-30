@@ -10,8 +10,9 @@ const {
     highlightFilenameMentions,
     getFileNames,
     getNonce,
-    addFileToPrompt,
-    LRUCache
+    LRUCache,
+    runPythonFile,
+    sanitizeProgram
 } = require("./functions");
 
 const userQuestions = [];
@@ -24,6 +25,8 @@ let questionsAndResponses = [];
 let previousResponse = "";
 let currentResponse = "";
 let textFromFile = "";
+let promptValue = "";
+let currentMentionedFiles = {};
 
 let llmIndex = 0;
 let writeToFile = false;
@@ -31,57 +34,135 @@ let outputFileName = "output";
 let fileTitles = {};
 let currenlyResponding = false;
 let continueResponse = true;
+let agentMode = false;
+let queuedChanges = [];
+
+let runnablePrograms = {}
+let programStartIndex = 0;
+let lastCalled = 0;
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
 converter.setOption("smoothLivePreview", true);
 
-const deepseek = "deepseek/deepseek-chat:free";
+const deepseek = "deepseek/deepseek-r1-0528:free";
 const gemma = "google/gemini-2.0-flash-exp:free";
-const qwen = "qwen/qwen3-235b-a22b:free";
+const qwen = "qwen/qwen3-32b:free";
 const gemma3 = "google/gemma-3-27b-it:free";
 const nvidia = "nvidia/llama-3.3-nemotron-super-49b-v1:free";
 const llama = "meta-llama/llama-4-maverick:free";
+const microsoft = "microsoft/mai-ds-r1:free"
+
+const token = '!@!@!@!'
+const backticks = '```';
+
+const systemMessage = `
+You are being used as a AI Coding Agent assistant. When the user asks you a question, and the response to the question 
+has parts where changes are being made, like new files are being created or modified, YOU MUST generate the code to allow 
+for the execution of the response, using the data given to you, ONLY USING PYTHON. The code that will allow for the exection of the response MUST 
+be enclosed using ${token} once at the start and again at the end, before you even generate the code, making it outside the code block.
+Make sure that the code you generate will succeed, and will do what it is intended to do, such as adding comments to an existing code file, 
+or creating a new file in the current directory. Double check to make sure that it will work as intended. BETWEEN the ${token} scopes, the code 
+MUST BE ABLE to run as if it is a PYTHON file, making sure the syntax and the spacing are correct. IF YOU ARE ASKED TO MODIFY A FILE, USE THE BASE WORKSPACE PATH 
+TO PROVIDE A PATH THAT MAKES SURE THE CREATED FILE IS MADE IN THE CORRECT DIRECTORY. MAKE SURE that instead of just responding with the 
+completed task as a chat, generate a Python program so that it can be run, and will make the changes that the user is looking for. MAKE SURE that 
+what you import are NEEDED, and that IT IS BEING USED. If it is NEEDED and it does not look like it is installed, generate a function that will install the NEEDED packages 
+for the user. MAKE SURE THAT ${token} is only being used at the start and end of the code you generated, and no where else, not even in your explainations. YOU ARE 
+ABLE TO GENERATE MULTIPLE PROGRAMS IF NEEDED, and EVERYTIME YOU GENERATE THEM, make sure that it is enclosed within ${token}. AFTER YOU USE THE ${token}, make SURE 
+THAT YOUR CODE BLOCK IS ALSO ENCLOSED using ${backticks}, with an example program looking like: ${token}\n${backticks}{program....}${backticks}\n${token}. DO NOT, I REPEAT, DO NOT 
+SHOW ${token} ANYWHERE ELSE IN THE RESPONSE EXCEPT ENCLOSING YOUR GENERATED FUNCTION, NOT EVEN IN YOUR EXPLANATION. ALSO, for generated code, KEEP YOUR EXPLANATION TO A MINIMUM, AND 
+IF NEEDED, ONLY GIVE MAXIMUM 2 SENTENCES. VERIFY THAT YOU ARE FOLLOWING ALL OF THESE RULES WHEN STREAMING YOUR RESPONSE. MAKE SURE, TRIPLE CHECK THAT THE PROGRAM HAS THE 
+TOKEN BARRIER, AND FOLLOWS THE CORRECT BLUEPRINT AS THE EXAMPLE PROGRAM.
+`
 
 const llms = [
-    nvidia,
-    llama,
+    gemma3,
     qwen,
-    deepseek,
-    gemma,
-    gemma3
+    microsoft
 ];
 
 const llmNames = [
-    "Llama 3.3 Nemotron",
-    "Llama 4 Maverick",
-    "Qwen3",
-    "Deepseek V3",
-    "Gemma 2.0 Flash",
-    "Gemma 3.0 (27b)"
+    "Gemma 3.0 (27b)",
+    "Qwen3 (32b)",
+    "Microsoft MAI"
 ];
 
-const sendStream = (panel, stream) => {
+const updateQueuedChanges = () => {
+    for (const [variant, value] of queuedChanges) {
+        if (variant == "selectLLM") {
+            llmIndex = parseInt(value);
+        } else if (variant == "outputToFile") {
+            writeToFile = value;
+        } else if (variant == "changeMode") {
+            agentMode = value == "false" ? false : true;
+        }
+    }
+
+    queuedChanges = [];
+}
+
+const generateProgram = (panel, stream, currentTime=Date.now()) => {
+    if (currentTime - lastCalled < 2000) return;
+    lastCalled = currentTime;
+
+    const initialIndex = stream.indexOf(token, programStartIndex);
+    if (initialIndex == -1) return;
+    const endIndex = stream.indexOf(token, initialIndex + token.length);
+    if (endIndex == -1) return;
+
+    let pyProg = stream.substring(initialIndex + token.length, endIndex);
+    pyProg = sanitizeProgram(pyProg);
+    if (!pyProg) return;
+
+    runnablePrograms[initialIndex] = pyProg;
+    panel.webview.postMessage({ command: 'pythonProg', text: pyProg, value: initialIndex });
+    programStartIndex = endIndex + token.length;
+}
+
+const sendStream = (panel, stream, final=false) => {
     if (writeToFile) {
         sendToFile(stream, outputFileName);
     } else if (panel && panel.webview) {
-        panel.webview.postMessage({ command: "response", text: converter.makeHtml(stream) });
+        let showData = stream.replaceAll(token, "");
+        panel.webview.postMessage({ command: "response", text: converter.makeHtml(showData), value: final });
+        agentMode && generateProgram(panel, stream);
     }
 };
 
 const generateMessages = async (chat, mentionedCode) => {
     const messages = [];
+    const noFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
+    let baseMessage = "";
+
+    if (!noFolder) {
+        let basePath = vscode.workspace.workspaceFolders[0].uri.path;
+        if (basePath.at(0) == '/' || basePath.at(0) == '\\') basePath = basePath.substring(1);
+        baseMessage = `BASE WORKSPACE PATH: ${basePath}`
+    }
+
+    if (agentMode == true) {
+        messages.push({
+            role: 'system',
+            content: systemMessage
+        })
+    }
     
     if (fileHistory.size() > 0) {
         const files = await fileHistory.getTextFile();
         messages.push({
-            role: 'user',
-            content: files
+            role: 'system',
+            content: files + '\n\n' + baseMessage
+        })
+    } else if (baseMessage) {
+        messages.push({
+            role: 'system',
+            content: baseMessage
         })
     }
 
-    for (const {question, response} of questionsAndResponses.slice(-5)) {
+    for (const {question, response, mode} of questionsAndResponses.slice(-5)) {
         const systemResponse = response.substring(0, response.lastIndexOf('\n'));
+        if (!agentMode && mode != agentMode) continue;
 
         messages.push({
             role: 'user',
@@ -141,14 +222,16 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             }
 
         } else {
-            sendStream(panel, totalResponse);
+            agentMode && generateProgram(panel, totalResponse, lastCalled + 3500);
+            sendStream(panel, totalResponse, true);
         }
 
         questionHistory.push(chat);
         responseHistory.push(totalResponse);
         questionsAndResponses.push({
             question: originalQuestion,
-            response: totalResponse
+            response: totalResponse,
+            mode: agentMode
         })
 
     } catch (err) {
@@ -287,8 +370,7 @@ class AIChatViewProvider {
         this._extensionUri = _extensionUri;
         this.context = context;
         this.apiKey = apiKey;
-        this.regenHtml = 0;
-        this.prevWrite = false;
+        this.interactions = 0;
         this.openChat = new openai.OpenAI({
             baseURL: "https://openrouter.ai/api/v1",
             apiKey: this.apiKey
@@ -309,19 +391,24 @@ class AIChatViewProvider {
     }
 
     updateFileList() {
-        if (this._view && this._view.webview) {
-            const notOpenFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
-            this._view.webview.postMessage({ command: 'fileTitles', value: fileTitles });
-            if (!notOpenFolder) {
-                this._view.webview.postMessage({ command: 'workspacePath', value: vscode.workspace.workspaceFolders[0].uri.path });
-            }
+        if (!this._view || !this._view.webview) return;
+        const notOpenFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
+        this._view.webview.postMessage({ command: 'fileTitles', value: fileTitles });
+        if (!notOpenFolder) {
+            this._view.webview.postMessage({ command: 'workspacePath', value: vscode.workspace.workspaceFolders[0].uri.path });
         }
     }
 
+    updatePageValues() {
+        if (!this._view || !this._view.webview) return;
+        this._view.webview.postMessage({ command: 'updateValues', value: [writeToFile, agentMode, llmIndex] });
+        this._view.webview.postMessage({ command: "promptValue", text: promptValue, value: currentMentionedFiles });
+        this._view.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache).reverse() });
+    }
+
     loading() {
-        if (this._view && this._view.webview) {
-            this._view.webview.postMessage({ command: "loading", text: this._getSpinner() });
-        }
+        if (!this._view || !this._view.webview) return;
+        this._view.webview.postMessage({ command: "loading", text: this._getSpinner() });
     }
 
     show() {
@@ -348,13 +435,12 @@ class AIChatViewProvider {
 
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible) {
-                if (this.prevWrite != writeToFile || this.regenHtml != questionsAndResponses.length) {
+                if (this.interactions != questionsAndResponses.length) {
                     webviewView.webview.html = this._getHtmlForWebview();
-                    this.regenHtml = questionsAndResponses.length;
-                    this.prevWrite = writeToFile;
+                    this.interactions = questionsAndResponses.length;
                 }
                 this.updateFileList();
-                this._view.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache).reverse() })
+                this.updatePageValues();
                 this._view.webview.postMessage({ command: 'focus' });
             } else {
                 textFromFile = "";
@@ -362,8 +448,11 @@ class AIChatViewProvider {
         });
 
         webviewView.webview.onDidReceiveMessage(async (message) => {
-            if (message.command == "chat") {
+            if (message.command === "chat") {
                 if (currenlyResponding) return;
+                
+                promptValue = "";
+                currentMentionedFiles = {};
 
                 let userQuestion = message.text;
                 userQuestions.push(userQuestion);
@@ -384,35 +473,48 @@ class AIChatViewProvider {
                     text = replaceFileMentions(text, ["@" + file]);
                 }
 
-                const messages = await generateMessages(text, textFromFile);
-                textFromFile = "";
-                this.loading();
-                
+                this.loading();                
                 webviewView.webview.postMessage({ command: 'content', text: '' });
-                webviewView.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache).reverse() });
                 currenlyResponding = true;
 
+                const messages = await generateMessages(text, textFromFile);
+                webviewView.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache).reverse() });
+                textFromFile = "";
                 webviewView.webview.postMessage({ command: 'disableAsk' });
                 await sendChat(webviewView, messages, this.openChat, text, llmIndex, 0, userQuestion);
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
-                
+
+                updateQueuedChanges();
                 currenlyResponding = false;
+                programStartIndex = 0;
+                lastCalled = 0;
             } else if (message.command === 'copy') {
-                vscode.env.clipboard.writeText(message.text);
-            } else if (message.command == "selectLLM") {
+                await vscode.env.clipboard.writeText(message.text);
+            } else if (message.command === "selectLLM") {
                 llmIndex = parseInt(message.index);
             } else if (message.command === 'remove') {
                 textFromFile = "";
             } else if (message.command === 'clearHistory') {
                 webviewView.webview.postMessage({ command: 'history', value: currenlyResponding });
                 questionsAndResponses = [];
+                runnablePrograms = {};
             } else if (message.command === 'stopResponse') {
                 continueResponse = false;
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
             } else if (message.command === 'outputToFile') {
-                writeToFile = message.checked;
+                if (currenlyResponding) queuedChanges.push([message.command, message.checked]);
+                else writeToFile = message.checked;
             } else if (message.command === 'fileContext') {
                 fileHistory.delete(message.key);
+            } else if (message.command === 'runProgram') {
+                const file = runnablePrograms[message.key];
+                await runPythonFile(file);
+            } else if (message.command === 'changeMode') {
+                if (currenlyResponding) queuedChanges.push([message.command, message.value]);
+                else agentMode = message.value == 'false' ? false : true;
+            } else if (message.command === 'updatePrompt') {
+                promptValue = message.value;
+                currentMentionedFiles = message.files;
             }
         });
     }
@@ -436,7 +538,7 @@ class AIChatViewProvider {
               chatHistoryHtml += `
                 <div class="chat-entry">
                     <div class="question"><strong>You:</strong> ${highlightFilenameMentions(questionsAndResponses[i].question)}</div>
-                    <div class="response">${converter.makeHtml(questionsAndResponses[i].response)}</div>
+                    <div class="response">${converter.makeHtml(questionsAndResponses[i].response.replaceAll(token, ""))}</div>
                 </div>
             `;
         }
@@ -445,6 +547,16 @@ class AIChatViewProvider {
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "styles.css"));
         const nonce = getNonce();
         const disableOutput = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
+
+        const llmModes = ["Chat"];
+        !disableOutput && llmModes.push("Agent");
+        let llmModeOption = '';
+
+        for (const mode of llmModes) {
+            const selected = (mode == "Agent") == agentMode;
+            const value = mode == "Agent"
+            llmModeOption += `<option value="${value}" ${selected ? 'selected' : ''}>${mode}</option>`
+        }
 
         return /*html*/`
         <!DOCTYPE html>
@@ -462,7 +574,7 @@ class AIChatViewProvider {
             <div id="chat-container">
                 <div id="input-area">
                     <div id="context-files"></div>
-                    <textarea id="prompt" rows="3" placeholder="Type your message here, with @file.ext to mention files, and using tab to select the correct one..."></textarea>
+                    <textarea id="prompt" rows="3" placeholder="Type your message here, with @file.ext to mention files (max 3), and using tab to select the correct one..."></textarea>
                     <div tabindex='-1' id="file-options"></div>
                     <div class="options-container">
                         <div id="llmDropdown">
@@ -471,13 +583,18 @@ class AIChatViewProvider {
                                 ${optionsHtml}
                             </select>
                         </div>
-                        <button id="clear-history">Clear History</button>
+                        <select id="mode-select">
+                            ${llmModeOption}
+                        </select>
                     </div>
 
-                    <div class="${disableOutput ? "checkbox-button-container-hidden" : "checkbox-button-container"}">
-                        <input type="checkbox" id="writeToFileCheckbox" class="checkbox-button-input" ${writeToFile ? 'checked' : ''}>
-                        <label for="writeToFileCheckbox" class="checkbox-button-label">Write to File</label>
-                        <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
+                    <div class="options-container">
+                        <div class="${disableOutput ? "checkbox-button-container-hidden" : "checkbox-button-container"}">
+                            <input type="checkbox" id="writeToFileCheckbox" class="checkbox-button-input" ${writeToFile ? 'checked' : ''}>
+                            <label for="writeToFileCheckbox" class="checkbox-button-label">Write to File</label>
+                            <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
+                        </div>
+                        <button id="clear-history">Clear History</button>
                     </div>
                     
                     <div id="content"></div>
