@@ -129,6 +129,9 @@ const sanitizeProgram = (text) => {
 const runPythonFile = async (text) => {
     const filePath = getFilePath("run_py", "py");
     const outputPath = getFilePath("run_py_output", "txt");
+    const basePath = path.dirname(outputPath);
+    if (basePath.at(0) == '\\' || basePath.at(0) == '/') basePath = basePath.substring(1);
+
     const isDangerous = await checkCodeForDangerousPatterns(text);
     if (isDangerous) return;
 
@@ -136,6 +139,9 @@ const runPythonFile = async (text) => {
 
     const pyProg = spawn('python', [filePath], {
         timeout: 30 * 1000, // 30 seconds,
+        env: {
+            BASE_WORKSPACE_PATH: basePath
+        }
     });
   
     pyProg.stdout.on('data', (data) => {
