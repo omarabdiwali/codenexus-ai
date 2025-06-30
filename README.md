@@ -4,17 +4,22 @@ This VSCode extension allows the users to be able to ask multiple LLMs questions
 
 It allows users to mention open files using `@filename.ext` with custom autocomplete functionality, and answer the question based on the code. They are able to pick from 5 different LLMs, which are free, and switches between them if there is an error with the selected LLM. Also, it gives the user the ability to highlight part of a file, and use the keyboard shortcut `Ctrl+K` in order to open the extension and mention the highlighted text automatically.
 
+
+![File Autocomplete](https://i.imgur.com/kxoblg6.png)
+
+
+The extension also has an 'Agent' Mode, where the user can ask the LLM to do something that requires a program to be run, such as creating a file, and the LLM will respond with a Python program that will execute what the user wants. With this Python program, the user will be able to run it from the extension, where the extension will check for dangerous code, then write the program to a Python file within the base directory, and will execute the code. For Agent Mode to work, the system needs to have `Python` installed, and accessible from the terminal using `python --version`.
+
+
+![Agent Mode](https://i.imgur.com/tUTP5F8.png)
+
+
 The extension also retains the last 5 interactions between the user and the LLM, and can be cleared using the "Clear History" button. When a file is mentioned in a prompt, it is also saved for context, using an LRU cache that is currently limited to 3 files. To remove them from the context, users are able to cancel them from the display above the prompt textarea.
 
 To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use the extension, you will need an OpenRouter API key, which the extension will ask for when you open it for the first time.
 
-![File Autocomplete](https://i.imgur.com/YMBbnTq.png)
 
-
-![Chat Response](https://i.imgur.com/dvrPqxq.png)
-
-
-![File Output](https://i.imgur.com/vCAcPX5.png)
+![File Output](https://i.imgur.com/uCOJMvD.png)
 
 
 ## Local Installation and Usage
@@ -41,6 +46,7 @@ To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use
   * File content extraction and handling (addFileToPrompt, getFileNames)
   * Error handling and user notification for file operations
   * Nonce generation (getNonce)
+  * Evaluation of generated Python programs, and ability to run them (checkCodeForDangerousPatterns, sanitizeProgram, runPythonFile)
   * A LRU Cache class used to limit the number of retained files (LRUCache)
 * `styles.css`, `spinner.css` - these CSS files hold the styling for the webview panel, and the loading spinner.
 
