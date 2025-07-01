@@ -117,7 +117,7 @@ const generateRunButton = (key) => {
             runButton.disabled = true;
         } else {
             vscode.postMessage({ command: 'killProcess', key });
-            runButton.disabled = true;
+            runButton.remove();
             delete linkCodeWithButton[key];
         }
     };
@@ -562,7 +562,7 @@ window.addEventListener("message", (e) => {
     } else if (command == 'disableKill') {
         const button = linkCodeWithButton[key];
         if (!button) return;
-        button.disabled = true;
+        button.remove();
         delete linkCodeWithButton[key];
     } else if (command == 'programRun') {
         const button = linkCodeWithButton[key];

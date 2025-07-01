@@ -168,7 +168,7 @@ const killProcess = (pid) => {
 
     exec(cmd, (error, stdout, stderr) => {
         if (error) vscode.window.showErrorMessage(`${stderr.trim()}`);
-        else vscode.window.showErrorMessage(`${stdout.trim()}`);
+        else vscode.window.showInformationMessage(`${stdout.trim()}`);
     });
 }
 
