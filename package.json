@@ -49,7 +49,50 @@
         "command": "ai-chat.openChatWithSelection",
         "title": "AI Chat: Open with Selection"
       }
-    ]
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "AI-Chat Extension Settings",
+      "properties": {
+        "AI-Chat.ModelNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["Gemma 3.0 (27b)", "Qwen3 (32b)", "Microsoft MAI"],
+          "description": "Names of the Large Language Models (list Models and Model Names in the same order)."
+        },
+        "AI-Chat.Models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["google/gemma-3-27b-it:free", "qwen/qwen3-32b:free", "microsoft/mai-ds-r1:free"],
+          "description": "Unique IDs of the Large Language Models (list Models and Model Names in the same order)."
+        },
+        "AI-Chat.FileContextSize": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Maximum number of files that can be kept for context."
+        },
+        "AI-Chat.InteractionHistorySize": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "The length of interaction history used for context."
+        },
+        "AI-Chat.TimeoutLength": {
+          "type": "number",
+          "default": 180,
+          "minimum": 15,
+          "maximum": 600,
+          "description": "Maximum time a Python program can run using Agent Mode (in seconds)."
+        }
+      }
+    }
   },
   "scripts": {
     "lint": "eslint .",

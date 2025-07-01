@@ -11,8 +11,8 @@ const fileSearch = document.getElementById('file-options');
 const contextFiles = document.getElementById('context-files');
 const llmMode = document.getElementById('mode-select')
 const regEx = new RegExp(/[\b\@][\w\.]*\.[a-zA-Z]+\b/g);
-const maxFiles = 3;
 
+let maxFiles = 3;
 let prevPrompt = "";
 let baseWorkspacePath = null;
 let lastCursorPosition = 0;
@@ -513,6 +513,7 @@ window.addEventListener("message", (e) => {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
     } else if (command == "error") {
         responseArea.lastElementChild.querySelector('.response').innerText = text;
+        generateCloseButton(responseArea.lastElementChild, key);
     } else if (command == 'chat') {
         appendToChat(text);
     } else if (command == 'focus') {
@@ -552,11 +553,12 @@ window.addEventListener("message", (e) => {
         prompt.value = text;
         mentionedFiles = value;
     } else if (command == 'updateValues') {
-        const [toFile, agent, index] = value;
+        const [toFile, agent, index, fileSize] = value;
         writeToFileCheckbox.checked = toFile;
         outputFileNameInput.disabled = !writeToFileCheckbox.checked;
         llmMode.value = `${agent}`;
         llmSelect.value = index;
+        maxFiles = fileSize;
     } else if (command == 'disableKill') {
         const button = linkCodeWithButton[key];
         if (!button) return;

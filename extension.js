@@ -42,18 +42,20 @@ let runnablePrograms = {}
 let runningPIDs = {};
 let programStartIndex = 0;
 let lastCalled = 0;
+let interactionHistory = 5;
+let timeoutLength = 180;
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
 converter.setOption("smoothLivePreview", true);
 
-const deepseek = "deepseek/deepseek-r1-0528:free";
-const gemma = "google/gemini-2.0-flash-exp:free";
-const qwen = "qwen/qwen3-32b:free";
-const gemma3 = "google/gemma-3-27b-it:free";
-const nvidia = "nvidia/llama-3.3-nemotron-super-49b-v1:free";
-const llama = "meta-llama/llama-4-maverick:free";
-const microsoft = "microsoft/mai-ds-r1:free"
+// const deepseek = "deepseek/deepseek-r1-0528:free";
+// const gemma = "google/gemini-2.0-flash-exp:free";
+// const qwen = "qwen/qwen3-32b:free";
+// const gemma3 = "google/gemma-3-27b-it:free";
+// const nvidia = "nvidia/llama-3.3-nemotron-super-49b-v1:free";
+// const llama = "meta-llama/llama-4-maverick:free";
+// const microsoft = "microsoft/mai-ds-r1:free"
 
 const token = '!@!@!@!'
 const backticks = '```';
@@ -79,17 +81,28 @@ AS THE PROGRAM WILL BE RUNNING FROM A DIFFERENT DIRECTORY. MAKE SURE THAT YOU AR
 DEFAULT TO THE BASE WORKSPACE PATH GIVEN IN YOUR SYSTEM PROMPTS.
 `
 
-const llms = [
-    gemma3,
-    qwen,
-    microsoft
-];
+let llms = [];
+let llmNames = [];
 
-const llmNames = [
-    "Gemma 3.0 (27b)",
-    "Qwen3 (32b)",
-    "Microsoft MAI"
-];
+const getConfigData = async (event=null) => {
+    const config = vscode.workspace.getConfiguration("AI-Chat");
+    const models = config.Models || [];
+    const modelNames = config.ModelNames || [];
+    const validModels = models.filter((val) => val.trim().length != 0);
+    const validNames = modelNames.filter((val) => val.trim().length != 0);
+    if (models.length != validModels.length) await config.update("Models", validModels);
+    if (modelNames.length != validNames.length) await config.update("ModelNames", validNames);
+    
+    let length = Math.min(validModels.length, validNames.length);
+    let lruSize = config.FileContextSize;
+    
+    llms = validModels.slice(0, length);
+    llmNames = validNames.slice(0, length);
+    llmIndex = Math.min(llmIndex, length-1);
+    fileHistory.changeSize(lruSize);
+    interactionHistory = config.InteractionHistorySize;
+    timeoutLength = config.TimeoutLength;
+}
 
 const updateQueuedChanges = () => {
     for (const [variant, value] of queuedChanges) {
@@ -161,7 +174,7 @@ const generateMessages = async (chat, mentionedCode) => {
         addMessage(messages, 'system', baseMessage);
     }
 
-    for (const {question, response, mode} of questionsAndResponses.slice(-5)) {
+    for (const {question, response, mode} of questionsAndResponses.slice(-interactionHistory)) {
         const systemResponse = response.substring(0, response.lastIndexOf('\n'));
         if (!agentMode && mode != agentMode) continue;
         addMessage(messages, 'user', question);
@@ -245,7 +258,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             }
 
             if (!writeToFile && panel && panel.webview) {
-                panel.webview.postMessage({ command: "error", text: err.message });
+                panel.webview.postMessage({ command: "error", text: err.message, key: crypto.randomUUID() });
             } else {
                 vscode.window.showErrorMessage("Error writing to chat: " + err.message);
             }
@@ -277,6 +290,7 @@ async function activate(context) {
         await context.secrets.store('aiChatApiKey', apiKey);
     }
 
+    await getConfigData();
     const provider = new AIChatViewProvider(context.extensionUri, context, apiKey);
 
     const updateOpenAIClient = (key) => {
@@ -288,6 +302,11 @@ async function activate(context) {
             });
         }
     };
+
+    vscode.workspace.onDidChangeConfiguration(async (event) => {
+        await getConfigData();
+        provider.updateHTML();
+    })
 
     const changeApiKeyCommand = vscode.commands.registerCommand('ai-chat.changeApiKey', async () => {
         const newApiKey = await vscode.window.showInputBox({
@@ -382,18 +401,24 @@ class AIChatViewProvider {
         this._view.webview.postMessage({ command: 'focus' });
     }
 
-    updateFileList() {
+    updateWorkspacePath() {
+        if (!this._view || !this._view.webview) return;
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0) return;
+        this._view.webview.postMessage({ command: 'workspacePath', value: vscode.workspace.workspaceFolders[0].uri.path });
+    }
+
+    updateFileList(updatePath=true) {
         if (!this._view || !this._view.webview) return;
         const notOpenFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
         this._view.webview.postMessage({ command: 'fileTitles', value: fileTitles });
-        if (!notOpenFolder) {
+        if (!notOpenFolder && updatePath) {
             this._view.webview.postMessage({ command: 'workspacePath', value: vscode.workspace.workspaceFolders[0].uri.path });
         }
     }
 
     updatePageValues() {
         if (!this._view || !this._view.webview) return;
-        this._view.webview.postMessage({ command: 'updateValues', value: [writeToFile, agentMode, llmIndex] });
+        this._view.webview.postMessage({ command: 'updateValues', value: [writeToFile, agentMode, llmIndex, fileHistory.maxSize] });
         this._view.webview.postMessage({ command: "promptValue", text: promptValue, value: currentMentionedFiles });
         this._view.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache).reverse() });
     }
@@ -409,6 +434,14 @@ class AIChatViewProvider {
         } else {
             vscode.window.showErrorMessage("Attempted to show view, but it's not resolved yet. Open initially before using the keyboard shortcut.");
         }
+    }
+
+    updateHTML() {
+        if (!this._view || !this._view.webview) return;
+        this._view.webview.html = this._getHtmlForWebview();
+        this.updateWorkspacePath();
+        this.updatePageValues();
+        this.updateFileList(false);
     }
 
     resolveWebviewView(webviewView, _token) {
@@ -431,8 +464,9 @@ class AIChatViewProvider {
                     webviewView.webview.html = this._getHtmlForWebview();
                     this.interactions = questionsAndResponses.length;
                 }
+                this.updateWorkspacePath();
                 this.updatePageValues();
-                this.updateFileList();
+                this.updateFileList(false);
                 this._view.webview.postMessage({ command: 'focus' });
             } else {
                 textFromFile = "";
@@ -500,7 +534,7 @@ class AIChatViewProvider {
                 fileHistory.delete(message.key);
             } else if (message.command === 'runProgram') {
                 const file = runnablePrograms[message.key];
-                await runPythonFile(message.key, file, runningPIDs, webviewView);
+                await runPythonFile(message.key, file, runningPIDs, webviewView, timeoutLength);
             } else if (message.command === 'changeMode') {
                 if (currenlyResponding) queuedChanges.push([message.command, message.value]);
                 else agentMode = message.value == 'false' ? false : true;
@@ -509,6 +543,7 @@ class AIChatViewProvider {
                 currentMentionedFiles = message.files;
             } else if (message.command === 'deleteEntry') {
                 const index = questionsAndResponses.findIndex((val) => val.key == message.key)
+                if (index == -1) return;
                 questionsAndResponses.splice(index, 1);
                 this.interactions = questionsAndResponses.length - 1;
                 delete runningPIDs[message.key];
@@ -576,7 +611,7 @@ class AIChatViewProvider {
             <div id="chat-container">
                 <div id="input-area">
                     <div id="context-files"></div>
-                    <textarea id="prompt" rows="3" placeholder="Type your message here, with @file.ext to mention files (max 3), and using tab to select the correct one..."></textarea>
+                    <textarea id="prompt" rows="3" placeholder="Type your message here, with @file.ext to mention files (max ${fileHistory.maxSize}), and using tab to select the correct one..."></textarea>
                     <div tabindex='-1' id="file-options"></div>
                     <div class="options-container">
                         <div id="llmDropdown">

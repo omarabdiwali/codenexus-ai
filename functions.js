@@ -121,7 +121,7 @@ const sanitizeProgram = (text) => {
     }
 }
 
-const runPythonFile = async (key, text, pids, webview) => {
+const runPythonFile = async (key, text, pids, webview, timeoutSeconds) => {
     const filePath = getFilePath("run_py", "py");
     const outputPath = getFilePath("run_py_output", "txt");
     const basePath = path.dirname(outputPath);
@@ -136,7 +136,7 @@ const runPythonFile = async (key, text, pids, webview) => {
     fs.writeFileSync(filePath, text);
 
     const pyProg = spawn('python', [filePath], {
-        timeout: 3 * 60 * 1000,
+        timeout: timeoutSeconds * 1000,
         env: {
             ...process.env,
             BASE_WORKSPACE_PATH: basePath
@@ -176,6 +176,7 @@ class LRUCache {
     constructor(capacity) {
         this.cache = new Map();
         this.capacity = capacity;
+        this.maxSize = capacity;
     }
 
     get(key) {
@@ -199,6 +200,19 @@ class LRUCache {
     delete(key) {
         this.cache.delete(key);
         this.capacity += 1;
+    }
+
+    changeSize(size) {
+        if (this.size() <= size) {
+            this.capacity = size - this.size();
+        } else {
+            const overflow = this.size() - size;
+            for (let i = 0; i < overflow; i++) {
+                this.cache.delete(this.cache.keys().next().value)
+            }
+            this.capacity = 0;
+        }
+        this.maxSize = size;
     }
 
     size() {
