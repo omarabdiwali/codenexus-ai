@@ -12,7 +12,8 @@ const {
     getNonce,
     LRUCache,
     runPythonFile,
-    sanitizeProgram
+    sanitizeProgram,
+    killProcess
 } = require("./functions");
 
 const userQuestions = [];
@@ -38,6 +39,7 @@ let agentMode = false;
 let queuedChanges = [];
 
 let runnablePrograms = {}
+let runningPIDs = {};
 let programStartIndex = 0;
 let lastCalled = 0;
 
@@ -73,7 +75,8 @@ THAT YOUR CODE BLOCK IS ALSO ENCLOSED using ${backticks}, with an example progra
 SHOW ${token} ANYWHERE ELSE IN THE RESPONSE EXCEPT ENCLOSING YOUR GENERATED FUNCTION, NOT EVEN IN YOUR EXPLANATION. ALSO, for generated code, KEEP YOUR EXPLANATION TO A MINIMUM, AND 
 IF NEEDED, ONLY GIVE MAXIMUM 2 SENTENCES. VERIFY THAT YOU ARE FOLLOWING ALL OF THESE RULES WHEN STREAMING YOUR RESPONSE. MAKE SURE, TRIPLE CHECK THAT THE PROGRAM HAS THE 
 TOKEN BARRIER, AND FOLLOWS THE CORRECT BLUEPRINT AS THE EXAMPLE PROGRAM. ALSO, THE BASE PATH IS PROVIDED AS AN ENV VARIABLE AS WELL, WITH THE NAME 'BASE_WORKSPACE_PATH', MAKE SURE TO USE IT,
-AS THE PROGRAM WILL BE RUNNING FROM A DIFFERENT DIRECTORY.
+AS THE PROGRAM WILL BE RUNNING FROM A DIFFERENT DIRECTORY. MAKE SURE THAT YOU ARE RUNNING YOUR PROGRAM IN THE BASE DIRECTORY, AND ALWAYS SPECIFY WHERE THE BASE WORKSPACE IS, AND IF NEEDED, 
+DEFAULT TO THE BASE WORKSPACE PATH GIVEN IN YOUR SYSTEM PROMPTS.
 `
 
 const llms = [
@@ -428,8 +431,8 @@ class AIChatViewProvider {
                     webviewView.webview.html = this._getHtmlForWebview();
                     this.interactions = questionsAndResponses.length;
                 }
-                this.updateFileList();
                 this.updatePageValues();
+                this.updateFileList();
                 this._view.webview.postMessage({ command: 'focus' });
             } else {
                 textFromFile = "";
@@ -497,7 +500,7 @@ class AIChatViewProvider {
                 fileHistory.delete(message.key);
             } else if (message.command === 'runProgram') {
                 const file = runnablePrograms[message.key];
-                await runPythonFile(file);
+                await runPythonFile(message.key, file, runningPIDs, webviewView);
             } else if (message.command === 'changeMode') {
                 if (currenlyResponding) queuedChanges.push([message.command, message.value]);
                 else agentMode = message.value == 'false' ? false : true;
@@ -508,6 +511,12 @@ class AIChatViewProvider {
                 const index = questionsAndResponses.findIndex((val) => val.key == message.key)
                 questionsAndResponses.splice(index, 1);
                 this.interactions = questionsAndResponses.length - 1;
+                delete runningPIDs[message.key];
+            } else if (message.command === 'killProcess') {
+                const pid = runningPIDs[message.key];
+                if (!pid || pid == 0 || pid == 1) return;
+                killProcess(pid);
+                delete runningPIDs[message.key];
             }
         });
     }

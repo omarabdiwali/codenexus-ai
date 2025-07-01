@@ -23,6 +23,7 @@ let contextedFilesStorage = [];
 let queue = [];
 let lastMatching = 0;
 let alreadyMatched = {};
+let linkCodeWithButton = {};
 
 const createNumberOfFiles = (fileCount) => {
     const files = document.createElement('div');
@@ -111,10 +112,17 @@ const generateRunButton = (key) => {
     runButton.classList.add('interactive-button');
 
     runButton.onclick = () => {
-        vscode.postMessage({ command: "runProgram", key });
-        runButton.disabled = true;
+        if (runButton.innerText == 'Run') {
+            vscode.postMessage({ command: "runProgram", key });
+            runButton.disabled = true;
+        } else {
+            vscode.postMessage({ command: 'killProcess', key });
+            runButton.disabled = true;
+            delete linkCodeWithButton[key];
+        }
     };
 
+    linkCodeWithButton[key] = runButton;
     return runButton;
 }
 
@@ -515,6 +523,7 @@ window.addEventListener("message", (e) => {
     } else if (command == 'history') {
         if (value) responseArea.replaceChildren(responseArea.lastElementChild);
         else responseArea.replaceChildren();
+        if (!value) linkCodeWithButton = {};
     } else if (command == 'cancelView') {
         if (value) {
             ask.classList.replace("ask-chat", "cancel-response");
@@ -548,5 +557,20 @@ window.addEventListener("message", (e) => {
         outputFileNameInput.disabled = !writeToFileCheckbox.checked;
         llmMode.value = `${agent}`;
         llmSelect.value = index;
+    } else if (command == 'disableKill') {
+        const button = linkCodeWithButton[key];
+        if (!button) return;
+        button.disabled = true;
+        delete linkCodeWithButton[key];
+    } else if (command == 'programRun') {
+        const button = linkCodeWithButton[key];
+        if (!button) return;
+        if (!value) {
+            delete linkCodeWithButton[key];
+            return;
+        }
+        button.innerText = "Kill";
+        button.style.backgroundColor = "red";
+        button.disabled = false;
     }
 });

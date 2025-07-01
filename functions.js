@@ -121,24 +121,32 @@ const sanitizeProgram = (text) => {
     }
 }
 
-const runPythonFile = async (text) => {
+const runPythonFile = async (key, text, pids, webview) => {
     const filePath = getFilePath("run_py", "py");
     const outputPath = getFilePath("run_py_output", "txt");
     const basePath = path.dirname(outputPath);
     if (basePath.at(0) == '\\' || basePath.at(0) == '/') basePath = basePath.substring(1);
 
     const isDangerous = await checkCodeForDangerousPatterns(text);
-    if (isDangerous) return;
+    if (isDangerous) {
+        webview.webview.postMessage({ command: "programRun", value: false, key });
+        return;
+    }
 
     fs.writeFileSync(filePath, text);
 
     const pyProg = spawn('python', [filePath], {
-        timeout: 30 * 1000, // 30 seconds,
+        timeout: 3 * 60 * 1000,
         env: {
+            ...process.env,
             BASE_WORKSPACE_PATH: basePath
         }
     });
-  
+    
+    fs.appendFileSync(outputPath, `Child process spawned with PID: ${pyProg.pid}\n`);
+    pids[key] = pyProg.pid;
+    webview.webview.postMessage({ command: "programRun", value: true, key });
+
     pyProg.stdout.on('data', (data) => {
         fs.appendFileSync(outputPath, `${data.toString()}`)
     });
@@ -146,8 +154,21 @@ const runPythonFile = async (text) => {
         fs.appendFileSync(outputPath, `Python error: ${data.toString()}`)
     });
     pyProg.on('close', (code) => {
-        fs.appendFileSync(outputPath, `Python process exited with code ${code}\n\n\n`);
+        fs.appendFileSync(outputPath, `Python process exited with code ${code !== null ? code : "TIMEOUT"}\n\n`);
         vscode.window.showInformationMessage(`Output: ${outputPath}`);
+        delete pids[key];
+        webview.webview.postMessage({ command: "disableKill", key });
+    });
+}
+
+const killProcess = (pid) => {
+    if (!pid || isNaN(pid) || `${pid}`.length < 3) return;
+    const { exec } = require('child_process');
+    const cmd = `taskkill /pid ${pid} /f`;
+
+    exec(cmd, (error, stdout, stderr) => {
+        if (error) vscode.window.showErrorMessage(`${stderr.trim()}`);
+        else vscode.window.showErrorMessage(`${stdout.trim()}`);
     });
 }
 
@@ -213,5 +234,6 @@ module.exports = {
     getNonce,
     sanitizeProgram,
     runPythonFile,
+    killProcess,
     LRUCache
 }
