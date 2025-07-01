@@ -68,7 +68,7 @@
             "type": "string"
           },
           "default": ["google/gemma-3-27b-it:free", "qwen/qwen3-32b:free", "microsoft/mai-ds-r1:free"],
-          "description": "Unique IDs of the Large Language Models (list Models and Model Names in the same order)."
+          "description": "Unique IDs of the Large Language Models from OpenRouter (list Models and Model Names in the same order)."
         },
         "AI-Chat.FileContextSize": {
           "type": "number",
