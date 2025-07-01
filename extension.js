@@ -115,20 +115,28 @@ const generateProgram = (panel, stream, currentTime=Date.now()) => {
     pyProg = sanitizeProgram(pyProg);
     if (!pyProg) return;
 
-    runnablePrograms[initialIndex] = pyProg;
-    panel.webview.postMessage({ command: 'pythonProg', text: pyProg, value: initialIndex });
+    const key = crypto.randomUUID();
+    runnablePrograms[key] = pyProg;
+    panel.webview.postMessage({ command: 'pythonProg', text: pyProg, key });
     programStartIndex = endIndex + token.length;
 }
 
-const sendStream = (panel, stream, final=false) => {
+const sendStream = (panel, stream, final=false, key=null) => {
     if (writeToFile) {
         sendToFile(stream, outputFileName);
     } else if (panel && panel.webview) {
         let showData = stream.replaceAll(token, "");
-        panel.webview.postMessage({ command: "response", text: converter.makeHtml(showData), value: final });
+        panel.webview.postMessage({ command: "response", text: converter.makeHtml(showData), value: final, key });
         agentMode && generateProgram(panel, stream);
     }
 };
+
+const addMessage = (messages, role, content) => {
+    messages.push({
+        role,
+        content
+    })
+}
 
 const generateMessages = async (chat, mentionedCode) => {
     const messages = [];
@@ -141,45 +149,23 @@ const generateMessages = async (chat, mentionedCode) => {
         baseMessage = `BASE WORKSPACE PATH: ${basePath}`
     }
 
-    if (agentMode == true) {
-        messages.push({
-            role: 'system',
-            content: systemMessage
-        })
-    }
+    agentMode && addMessage(messages, 'system', systemMessage);
     
     if (fileHistory.size() > 0) {
         const files = await fileHistory.getTextFile();
-        messages.push({
-            role: 'system',
-            content: files + '\n\n' + baseMessage
-        })
+        addMessage(messages, 'system', files + '\n\n' + baseMessage);
     } else if (baseMessage) {
-        messages.push({
-            role: 'system',
-            content: baseMessage
-        })
+        addMessage(messages, 'system', baseMessage);
     }
 
     for (const {question, response, mode} of questionsAndResponses.slice(-5)) {
         const systemResponse = response.substring(0, response.lastIndexOf('\n'));
         if (!agentMode && mode != agentMode) continue;
-
-        messages.push({
-            role: 'user',
-            content: question
-        })
-        messages.push({
-            role: 'assistant',
-            content: systemResponse
-        })
+        addMessage(messages, 'user', question);
+        addMessage(messages, 'assistant', systemResponse);
     }
 
-    messages.push({
-        role: 'user',
-        content: mentionedCode.length > 0 ? chat + '\n\n' + mentionedCode : chat
-    })
-
+    addMessage(messages, 'user', mentionedCode.length > 0 ? chat + '\n\n' + mentionedCode : chat);
     return messages;
 }
 
@@ -212,6 +198,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
         
         const runTime = `Call to ${llmNames[index]} took ${totalTime} seconds.`;
         const totalResponse = `${currentResponse}\n\n**${runTime}**`;
+        const key = crypto.randomUUID();
 
         if (writeToFile) {
             const pathToFile = getFilePath(outputFileName);
@@ -224,7 +211,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
 
         } else {
             agentMode && generateProgram(panel, totalResponse, lastCalled + 3500);
-            sendStream(panel, totalResponse, true);
+            sendStream(panel, totalResponse, true, key);
         }
 
         questionHistory.push(chat);
@@ -232,7 +219,8 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
         questionsAndResponses.push({
             question: originalQuestion,
             response: totalResponse,
-            mode: agentMode
+            mode: agentMode,
+            key
         })
 
     } catch (err) {
@@ -254,7 +242,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             }
 
             if (!writeToFile && panel && panel.webview) {
-                panel.webview.postMessage({ command: "error", text: err.message, question: chat });
+                panel.webview.postMessage({ command: "error", text: err.message });
             } else {
                 vscode.window.showErrorMessage("Error writing to chat: " + err.message);
             }
@@ -317,7 +305,7 @@ async function activate(context) {
     const focusChatCommand = vscode.commands.registerCommand('ai-chat.chat.focus', async (data) => {
         if (provider) {
             provider.show();
-            provider.handleIncomingData(data);
+            await provider.handleIncomingData(data);
         } else {
             vscode.window.showWarningMessage("Chat view provider not available yet.");
         }
@@ -516,6 +504,10 @@ class AIChatViewProvider {
             } else if (message.command === 'updatePrompt') {
                 promptValue = message.value;
                 currentMentionedFiles = message.files;
+            } else if (message.command === 'deleteEntry') {
+                const index = questionsAndResponses.findIndex((val) => val.key == message.key)
+                questionsAndResponses.splice(index, 1);
+                this.interactions = questionsAndResponses.length - 1;
             }
         });
     }
@@ -523,8 +515,8 @@ class AIChatViewProvider {
     _getSpinner() {
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "spinner.css"));
         return /*html*/`
-        <link rel="stylesheet" href="${cssFile}">
-        <div id="container"><div id="spinner"></div></div>
+            <link rel="stylesheet" href="${cssFile}">
+            <div id="container"><div id="spinner"></div></div>
         `;
     }
 
@@ -537,7 +529,7 @@ class AIChatViewProvider {
         let chatHistoryHtml = '';
         for (let i = 0; i < questionsAndResponses.length; i++) {
               chatHistoryHtml += `
-                <div class="chat-entry">
+                <div class="chat-entry" id="${questionsAndResponses[i].key}">
                     <div class="question"><strong>You:</strong> ${highlightFilenameMentions(questionsAndResponses[i].question, fileTitles)}</div>
                     <div class="response">${converter.makeHtml(questionsAndResponses[i].response.replaceAll(token, ""))}</div>
                 </div>

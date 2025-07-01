@@ -135,6 +135,7 @@ const generateCopyButton = (text) => {
 const generateButtons = (codeBlock, currentTime) => {
     const container = document.createElement('div');
     const buttonDiv = document.createElement('div');
+    if (!codeBlock.textContent) return;
     const copyButton = generateCopyButton(codeBlock.textContent);
 
     container.classList.add('code-container');
@@ -211,7 +212,26 @@ const highlightAllCodeBlocks = () => {
     addCopyButtons();
 };
 
+const generateCloseButton = (chatEntry, key) => {
+    const button = document.createElement('button');
+    button.innerText = 'X';
+    button.classList.add('delete-entry');
+    button.onclick = () => {
+        vscode.postMessage({ command: "deleteEntry", key });
+        chatEntry.remove();
+    }
+
+    chatEntry.appendChild(button);
+}
+
+const addCloseButtons = () => {
+    document.querySelectorAll(".chat-entry").forEach((element) => {
+        generateCloseButton(element, element.id);
+    })
+}
+
 highlightAllCodeBlocks();
+addCloseButtons();
 
 llmSelect.addEventListener('change', () => {
     const selectedIndex = llmSelect.value;
@@ -428,14 +448,9 @@ const escapeString = (str) => {
 const comapreCodeBlock = (codeBlock, value) => {
     const normCode = escapeString(normalizeString(codeBlock));
     const normValue = escapeString(normalizeString(value));
-
     const distance = levenDist(normCode, normValue);
     const maxLength = Math.max(normCode.length, normValue.length);
     const similarity = (1 - distance / maxLength);
-
-    // console.log(normCode);
-    // console.log(normValue);
-    console.log("Similarity:", similarity);
     return similarity >= 0.9;
 }
 
@@ -478,13 +493,14 @@ ask.addEventListener("click", () => {
 });
 
 window.addEventListener("message", (e) => {
-    const { command, text, value } = e.data;
+    const { command, text, value, key } = e.data;
 
     if (command == "response") {
-        // text = text.replaceAll('!@!@!@!', "");
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
-        if (value) highlightNewCodeBlocks(lastMatching + 5000);
-        else highlightNewCodeBlocks();
+        if (value) {
+            highlightNewCodeBlocks(lastMatching + 5000);
+            generateCloseButton(responseArea.lastElementChild, key);
+        } else highlightNewCodeBlocks();
     } else if (command == "loading") {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
     } else if (command == "error") {
@@ -522,7 +538,7 @@ window.addEventListener("message", (e) => {
         contextedFilesStorage = value;
         addContextedFiles();
     } else if (command == 'pythonProg') {
-        queue.push([value, text]);
+        queue.push([key, text]);
     } else if (command == 'promptValue') {
         prompt.value = text;
         mentionedFiles = value;

@@ -3,7 +3,6 @@ const fs = require("node:fs");
 const path = require('path');
 const { spawn } = require('child_process');
 
-
 /** Constructs the file path for a given filename. */
 const getFilePath = (filename, fileType='md') => {
     const filePath = path.join(vscode.workspace.workspaceFolders[0].uri.path, `${filename}.${fileType}`);
@@ -169,10 +168,10 @@ class LRUCache {
     put(key, value) {
         this.cache.delete(key);
         if (this.cache.size === this.capacity) {
-        this.cache.delete(this.cache.keys().next().value);
-        this.cache.set(key, value);
+            this.cache.delete(this.cache.keys().next().value);
+            this.cache.set(key, value);
         } else {
-        this.cache.set(key, value);
+            this.cache.set(key, value);
         }
     }
 
@@ -212,7 +211,6 @@ module.exports = {
     highlightFilenameMentions,
     getFileNames,
     getNonce,
-    addFileToPrompt,
     sanitizeProgram,
     runPythonFile,
     LRUCache
