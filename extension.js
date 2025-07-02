@@ -84,24 +84,37 @@ DEFAULT TO THE BASE WORKSPACE PATH GIVEN IN YOUR SYSTEM PROMPTS.
 let llms = [];
 let llmNames = [];
 
-const getConfigData = async (event=null) => {
+const updateConfig = async (event) => {
     const config = vscode.workspace.getConfiguration("AI-Chat");
-    const models = config.Models || [];
-    const modelNames = config.ModelNames || [];
-    const validModels = models.filter((val) => val.trim().length != 0);
-    const validNames = modelNames.filter((val) => val.trim().length != 0);
-    if (models.length != validModels.length) await config.update("Models", validModels);
-    if (modelNames.length != validNames.length) await config.update("ModelNames", validNames);
+    if (isChanged("Models", event)) {
+        const models = config.get("Models", []);
+        const validModels = models.filter((val) => val.trim().length != 0);
+        if (models.length != validModels.length) await config.update("Models", validModels);
+    } else if (isChanged("ModelNames", event)) {
+        const modelNames = config.get("ModelNames", []);
+        const validNames = modelNames.filter((val) => val.trim().length != 0);
+        if (modelNames.length != validNames.length) await config.update("ModelNames", validNames);
+    }
+}
+
+const getConfigData = async (event=null) => {
+    event && await updateConfig(event);
+    const config = vscode.workspace.getConfiguration("AI-Chat");
     
-    let length = Math.min(validModels.length, validNames.length);
-    let lruSize = config.FileContextSize;
+    const models = config.get("Models", []).filter((val) => val.trim().length != 0);
+    const modelNames = config.get("ModelNames", []).filter((val) => val.trim().length != 0);
+    const length = Math.min(models.length, modelNames.length);
     
-    llms = validModels.slice(0, length);
-    llmNames = validNames.slice(0, length);
-    llmIndex = Math.min(llmIndex, length-1);
-    fileHistory.changeSize(lruSize);
-    interactionHistory = config.InteractionHistorySize;
-    timeoutLength = config.TimeoutLength;
+    llms = models.slice(0, length);
+    llmNames = modelNames.slice(0, length);
+    llmIndex = Math.min(llmIndex, length - 1);
+    fileHistory.changeSize(config.get("FileContextSize", 3));
+    interactionHistory = config.get("InteractionHistorySize", 5);
+    timeoutLength = config.get("TimeoutLength", 180);
+}
+
+const isChanged = (value, event) => {
+    return event.affectsConfiguration(`AI-Chat.${value}`)
 }
 
 const updateQueuedChanges = () => {
@@ -303,11 +316,6 @@ async function activate(context) {
         }
     };
 
-    vscode.workspace.onDidChangeConfiguration(async (event) => {
-        await getConfigData();
-        provider.updateHTML();
-    })
-
     const changeApiKeyCommand = vscode.commands.registerCommand('ai-chat.changeApiKey', async () => {
         const newApiKey = await vscode.window.showInputBox({
             prompt: 'Enter your new OpenRouter API key',
@@ -344,6 +352,13 @@ async function activate(context) {
         
         await vscode.commands.executeCommand('ai-chat.chat.focus', text);
     });
+
+    vscode.workspace.onDidChangeConfiguration(async (event) => {        
+        if (event.affectsConfiguration("AI-Chat")) {
+            await getConfigData(event);
+            provider.updateHTML();
+        }
+    })
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(AIChatViewProvider.viewType, provider),
@@ -552,6 +567,8 @@ class AIChatViewProvider {
                 if (!pid || pid == 0 || pid == 1) return;
                 killProcess(pid);
                 delete runningPIDs[message.key];
+            } else if (message.command === 'openSettings') {
+                await vscode.commands.executeCommand("workbench.action.openSettings", "AI-Chat")
             }
         });
     }
@@ -602,6 +619,7 @@ class AIChatViewProvider {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
             <link rel="stylesheet" href="${cssFile}">
             <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.5/dist/purify.min.js"></script>
@@ -632,6 +650,7 @@ class AIChatViewProvider {
                             <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
                         </div>
                         <button id="clear-history">Clear History</button>
+                        <button id="open-settings"><i class="fas fa-cog icon"></i></button>
                     </div>
                     
                     <div id="content"></div>

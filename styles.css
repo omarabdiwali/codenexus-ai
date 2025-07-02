@@ -298,3 +298,15 @@ pre code.hljs {
     border-radius: var(--border-radius-size);
     outline: none;
 }
+#open-settings {
+    background-color: transparent;
+    color: rgb(77, 124, 138);
+    border: none;
+    margin-bottom: 10px;
+    margin-left: auto;
+    font-size: 18px;
+    cursor: pointer;
+}
+#open-settings:hover {
+    color: rgb(115, 178, 198);
+}

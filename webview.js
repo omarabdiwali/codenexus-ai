@@ -10,6 +10,7 @@ const clearHistory = document.getElementById('clear-history');
 const fileSearch = document.getElementById('file-options');
 const contextFiles = document.getElementById('context-files');
 const llmMode = document.getElementById('mode-select')
+const settings = document.getElementById('open-settings');
 const regEx = new RegExp(/[\b\@][\w\.]*\.[a-zA-Z]+\b/g);
 
 let maxFiles = 3;
@@ -464,6 +465,10 @@ const comapreCodeBlock = (codeBlock, value) => {
 
 clearHistory.addEventListener("click", () => {
     vscode.postMessage({ command: 'clearHistory' });
+})
+
+settings.addEventListener("click", () => {
+    vscode.postMessage({ command: "openSettings" });
 })
 
 prompt.addEventListener("keydown", (event) => {
