@@ -500,6 +500,7 @@ ask.addEventListener("click", () => {
         verifyMentionedFiles(text);
         vscode.postMessage({ command: 'chat', mentionedFiles, text, writeToFile: writeToFileCheckbox.checked, outputFile: outputFileNameInput.value });
         mentionedFiles = {};
+        fileSearch.style.display = 'none';
     } else {
         vscode.postMessage({ command: "stopResponse" });
     }
@@ -579,5 +580,21 @@ window.addEventListener("message", (e) => {
         button.innerText = "Kill";
         button.style.backgroundColor = "red";
         button.disabled = false;
+    } else if (command == 'programOutput') {
+        const button = linkCodeWithButton[key];
+        if (!button) return;
+        const container = button.parentNode.parentNode;
+        if (!container) return;
+
+        if (value) {
+            const outputBox = document.createElement("code");
+            outputBox.classList.add("output");
+            outputBox.classList.add("hljs");
+            outputBox.textContent += text;
+            container.appendChild(outputBox);
+        } else {
+            const outputBox = codeBlock.querySelector(".output");
+            outputBox.textContent += text;
+        }
     }
 });

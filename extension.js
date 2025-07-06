@@ -49,14 +49,6 @@ const converter = new showdown.Converter();
 converter.setOption("tables", true);
 converter.setOption("smoothLivePreview", true);
 
-// const deepseek = "deepseek/deepseek-r1-0528:free";
-// const gemma = "google/gemini-2.0-flash-exp:free";
-// const qwen = "qwen/qwen3-32b:free";
-// const gemma3 = "google/gemma-3-27b-it:free";
-// const nvidia = "nvidia/llama-3.3-nemotron-super-49b-v1:free";
-// const llama = "meta-llama/llama-4-maverick:free";
-// const microsoft = "microsoft/mai-ds-r1:free"
-
 const token = '!@!@!@!'
 const backticks = '```';
 
@@ -435,7 +427,7 @@ class AIChatViewProvider {
         if (!this._view || !this._view.webview) return;
         this._view.webview.postMessage({ command: 'updateValues', value: [writeToFile, agentMode, llmIndex, fileHistory.maxSize] });
         this._view.webview.postMessage({ command: "promptValue", text: promptValue, value: currentMentionedFiles });
-        this._view.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache).reverse() });
+        this._view.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache) });
     }
 
     loading() {
@@ -519,7 +511,7 @@ class AIChatViewProvider {
                 currenlyResponding = true;
 
                 const messages = await generateMessages(text, textFromFile);
-                webviewView.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache).reverse() });
+                webviewView.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache) });
                 textFromFile = "";
                 webviewView.webview.postMessage({ command: 'disableAsk' });
                 await sendChat(webviewView, messages, this.openChat, text, llmIndex, 0, userQuestion);

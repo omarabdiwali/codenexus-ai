@@ -123,8 +123,7 @@ const sanitizeProgram = (text) => {
 
 const runPythonFile = async (key, text, pids, webview, timeoutSeconds) => {
     const filePath = getFilePath("run_py", "py");
-    const outputPath = getFilePath("run_py_output", "txt");
-    const basePath = path.dirname(outputPath);
+    const basePath = path.dirname(filePath);
     if (basePath.at(0) == '\\' || basePath.at(0) == '/') basePath = basePath.substring(1);
 
     const isDangerous = await checkCodeForDangerousPatterns(text);
@@ -143,19 +142,18 @@ const runPythonFile = async (key, text, pids, webview, timeoutSeconds) => {
         }
     });
     
-    fs.appendFileSync(outputPath, `Child process spawned with PID: ${pyProg.pid}\n`);
     pids[key] = pyProg.pid;
     webview.webview.postMessage({ command: "programRun", value: true, key });
+    webview.webview.postMessage({ command: "programOutput", key, value: true, text: `Child process spawned with PID: ${pyProg.pid}\n` });
 
     pyProg.stdout.on('data', (data) => {
-        fs.appendFileSync(outputPath, `${data.toString()}`)
+        webview.webview.postMessage({ command: "programOutput", key, text: `${data.toString()}\n` });
     });
     pyProg.stderr.on('data', (data) => {
-        fs.appendFileSync(outputPath, `Python error: ${data.toString()}`)
+        webview.webview.postMessage({ command: "programOutput", key, text: `Python error: ${data.toString()}\n` });
     });
     pyProg.on('close', (code) => {
-        fs.appendFileSync(outputPath, `Python process exited with code ${code !== null ? code : "TIMEOUT"}\n\n`);
-        vscode.window.showInformationMessage(`Output: ${outputPath}`);
+        webview.webview.postMessage({ command: "programOutput", key, text: `Python process exited with code ${code !== null ? code : "TIMEOUT"}\n` });
         delete pids[key];
         webview.webview.postMessage({ command: "disableKill", key });
     });
@@ -226,13 +224,13 @@ class LRUCache {
     async getTextFile() {
         let textFromFiles = "Files mentioned in order from newest to oldest:\n\n";
         
-        for (const [location, fileName] of Array.from(this.cache).reverse()) {
-        const fileText = await getTextFromFile(location);
-        if (fileText === null) {
-            this.delete(location);
-        } else {
-            textFromFiles += `${fileName} (${location.substring(1)}):\n${fileText}`
-        }
+        for (const [location, fileName] of Array.from(this.cache)) {
+            const fileText = await getTextFromFile(location);
+            if (fileText === null) {
+                this.delete(location);
+            } else {
+                textFromFiles += `${fileName} (${location.substring(1)}):\n${fileText}`
+            }
         }
 
         return textFromFiles;
