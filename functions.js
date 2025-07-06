@@ -1,7 +1,7 @@
 const vscode = require("vscode");
 const fs = require("node:fs");
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 
 /** Constructs the file path for a given filename. */
 const getFilePath = (filename, fileType='md') => {
@@ -161,7 +161,6 @@ const runPythonFile = async (key, text, pids, webview, timeoutSeconds) => {
 
 const killProcess = (pid) => {
     if (!pid || isNaN(pid) || `${pid}`.length < 3) return;
-    const { exec } = require('child_process');
     const cmd = `taskkill /pid ${pid} /f`;
 
     exec(cmd, (error, stdout, stderr) => {

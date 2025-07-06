@@ -593,7 +593,7 @@ window.addEventListener("message", (e) => {
             outputBox.textContent += text;
             container.appendChild(outputBox);
         } else {
-            const outputBox = codeBlock.querySelector(".output");
+            const outputBox = container.querySelector(".output");
             outputBox.textContent += text;
         }
     }
