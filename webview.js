@@ -11,6 +11,7 @@ const fileSearch = document.getElementById('file-options');
 const contextFiles = document.getElementById('context-files');
 const llmMode = document.getElementById('mode-select')
 const settings = document.getElementById('open-settings');
+const refreshFiles = document.getElementById('refresh-files');
 const regEx = new RegExp(/[\b\@][\w\.]*\.[a-zA-Z]+\b/g);
 
 let maxFiles = 3;
@@ -460,7 +461,7 @@ const comapreCodeBlock = (codeBlock, value) => {
     const distance = levenDist(normCode, normValue);
     const maxLength = Math.max(normCode.length, normValue.length);
     const similarity = (1 - distance / maxLength);
-    return similarity >= 0.9;
+    return similarity >= 0.95;
 }
 
 clearHistory.addEventListener("click", () => {
@@ -469,6 +470,11 @@ clearHistory.addEventListener("click", () => {
 
 settings.addEventListener("click", () => {
     vscode.postMessage({ command: "openSettings" });
+})
+
+refreshFiles.addEventListener("click", () => {
+    refreshFiles.disabled = true;
+    vscode.postMessage({ command: "refreshFiles" });
 })
 
 prompt.addEventListener("keydown", (event) => {
@@ -548,6 +554,7 @@ window.addEventListener("message", (e) => {
         ask.disabled = true;
     } else if (command == 'fileTitles') {
         fileTitlesWithLocations = value;
+        refreshFiles.disabled = false;
     } else if (command == 'workspacePath') {
         baseWorkspacePath = value;
     } else if (command == 'fileContext') {

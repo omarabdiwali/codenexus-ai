@@ -9,6 +9,14 @@ const getFilePath = (filename, fileType='md') => {
     return filePath.at(0) == '/' || filePath.at(0) == '\\' ? filePath.slice(1) : filePath;
 }
 
+/** Gets all the files in the current workspace directory. */
+const getAllFiles = async () => {
+    const include = ''
+    const exclude = '{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}';
+    const allFiles = await vscode.workspace.findFiles(include, exclude);
+    return getFileNames(allFiles);
+}
+
 /** Writes content to a file in the workspace. */
 const sendToFile = (content, filename) => {
     try {
@@ -82,6 +90,7 @@ const addFileToPrompt = async (file, location, duplicatedFiles) => {
     return file + ":\n" + text;
 };
 
+/** Checks the generated code for dangerous patterns, and alerts the user. */
 const checkCodeForDangerousPatterns = (code) => {
     const dangerousPatterns = [
         /os\.system\(/i,        // Detects calls to os.system()
@@ -110,6 +119,7 @@ const checkCodeForDangerousPatterns = (code) => {
     }
 }
 
+/** Gets the generated program from the response. */
 const sanitizeProgram = (text) => {
     const regex = /```.*\n([\s\S]*?)```/;
     const match = text.match(regex);
@@ -121,6 +131,7 @@ const sanitizeProgram = (text) => {
     }
 }
 
+/** Creates and runs the generated Python script. */
 const runPythonFile = async (key, text, pids, webview, timeoutSeconds) => {
     const filePath = getFilePath("run_py", "py");
     const basePath = path.dirname(filePath);
@@ -159,6 +170,7 @@ const runPythonFile = async (key, text, pids, webview, timeoutSeconds) => {
     });
 }
 
+/** Kills the process that is identified from its PID. */
 const killProcess = (pid) => {
     if (!pid || isNaN(pid) || `${pid}`.length < 3) return;
     const cmd = `taskkill /pid ${pid} /f`;
@@ -169,6 +181,7 @@ const killProcess = (pid) => {
     });
 }
 
+/** An LRUCache that is used for handling the number of files for context. */
 class LRUCache {
     constructor(capacity) {
         this.cache = new Map();
@@ -238,6 +251,7 @@ class LRUCache {
 
 module.exports = {
     getFilePath,
+    getAllFiles,
     sendToFile,
     replaceFileMentions,
     highlightFilenameMentions,

@@ -5,10 +5,10 @@ const { performance } = require("perf_hooks");
 
 const {
     getFilePath,
+    getAllFiles,
     sendToFile,
     replaceFileMentions,
     highlightFilenameMentions,
-    getFileNames,
     getNonce,
     LRUCache,
     runPythonFile,
@@ -358,20 +358,14 @@ async function activate(context) {
         openChatShortcut
     );
 
-    const include = ''
-    const exclude = '{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}';
-    const allFiles = await vscode.workspace.findFiles(include, exclude);
-    fileTitles = getFileNames(allFiles);
-
+    fileTitles = await getAllFiles();
     const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.*', false, true, false);
     fileWatcher.onDidCreate(async (uri) => {
-        const allFiles = await vscode.workspace.findFiles(include, exclude);
-        fileTitles = getFileNames(allFiles);
+        fileTitles = await getAllFiles();
         provider.updateFileList();
     });
     fileWatcher.onDidDelete(async (uri) => {
-        const allFiles = await vscode.workspace.findFiles(include, exclude);
-        fileTitles = getFileNames(allFiles);
+        fileTitles = await getAllFiles();
         provider.updateFileList();
     });
 }
@@ -561,6 +555,9 @@ class AIChatViewProvider {
                 delete runningPIDs[message.key];
             } else if (message.command === 'openSettings') {
                 await vscode.commands.executeCommand("workbench.action.openSettings", "AI-Chat")
+            } else if (message.command === 'refreshFiles') {
+                fileTitles = await getAllFiles();
+                webviewView.webview.postMessage({ command: 'fileTitles', value: fileTitles });
             }
         });
     }
@@ -642,7 +639,8 @@ class AIChatViewProvider {
                             <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
                         </div>
                         <button id="clear-history">Clear History</button>
-                        <button id="open-settings"><i class="fas fa-cog icon"></i></button>
+                        <button title="Refresh files" class="options" id="refresh-files"><i class="fas fa-solid fa-sync-alt icon"></i></button>
+                        <button title="Settings" class="options" id="open-settings"><i class="fas fa-cog icon"></i></button>
                     </div>
                     
                     <div id="content"></div>
