@@ -1,7 +1,7 @@
 const vscode = require("vscode");
 const fs = require("node:fs");
 const path = require('path');
-const { spawn, exec } = require('child_process');
+const seen = new Set();
 
 /** Constructs the file path for a given filename. */
 const getFilePath = (filename, fileType='md') => {
@@ -119,66 +119,60 @@ const checkCodeForDangerousPatterns = (code) => {
     }
 }
 
-/** Gets the generated program from the response. */
-const sanitizeProgram = (text) => {
-    const regex = /```.*\n([\s\S]*?)```/;
-    const match = text.match(regex);
-    if (match) {
+const escapeRegExp = (str) => {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Gets all the generated programs from the response. */
+const getAllRunnablePrograms = (text, token, final=false) => {
+    const blocks = [];
+    const escapedToken = escapeRegExp(token);
+    const regex = new RegExp(
+        `${escapedToken}[\\s\\S]*?\`\`\`(?:\\w+)?\\n([\\s\\S]*?)\`\`\`[\\s\\S]*?${escapedToken}`,
+        "g"
+    );
+    
+    while ((match = regex.exec(text)) !== null) {
         const code = match[1].trim();
-        return code;
-    } else {
-        return ""
+        if (!seen.has(code)) {
+            seen.add(code);
+            blocks.push(code);
+        }
     }
+    
+    if (final) seen.clear();
+    return blocks;
+}
+
+const createVSCodeTerminal = (basePath) => {
+    const terminal = vscode.window.createTerminal({
+        name: 'Agent Terminal',
+        cwd: basePath,
+        env: {
+            ...process.env,
+            BASE_WORKSPACE_PATH: basePath
+        }
+    })
+
+    return terminal;
 }
 
 /** Creates and runs the generated Python script. */
-const runPythonFile = async (key, text, pids, webview, timeoutSeconds) => {
+const runPythonFile = async (text) => {
     const filePath = getFilePath("run_py", "py");
     const basePath = path.dirname(filePath);
     if (basePath.at(0) == '\\' || basePath.at(0) == '/') basePath = basePath.substring(1);
 
     const isDangerous = await checkCodeForDangerousPatterns(text);
     if (isDangerous) {
-        webview.webview.postMessage({ command: "programRun", value: false, key });
         return;
     }
 
     fs.writeFileSync(filePath, text);
-
-    const pyProg = spawn('python', [filePath], {
-        timeout: timeoutSeconds * 1000,
-        env: {
-            ...process.env,
-            BASE_WORKSPACE_PATH: basePath
-        }
-    });
-    
-    pids[key] = pyProg.pid;
-    webview.webview.postMessage({ command: "programRun", value: true, key });
-    webview.webview.postMessage({ command: "programOutput", key, value: true, text: `Child process spawned with PID: ${pyProg.pid}\n` });
-
-    pyProg.stdout.on('data', (data) => {
-        webview.webview.postMessage({ command: "programOutput", key, text: `${data.toString()}\n` });
-    });
-    pyProg.stderr.on('data', (data) => {
-        webview.webview.postMessage({ command: "programOutput", key, text: `Python error: ${data.toString()}\n` });
-    });
-    pyProg.on('close', (code) => {
-        webview.webview.postMessage({ command: "programOutput", key, text: `Python process exited with code ${code !== null ? code : "TIMEOUT"}\n` });
-        delete pids[key];
-        webview.webview.postMessage({ command: "disableKill", key });
-    });
-}
-
-/** Kills the process that is identified from its PID. */
-const killProcess = (pid) => {
-    if (!pid || isNaN(pid) || `${pid}`.length < 3) return;
-    const cmd = `taskkill /pid ${pid} /f`;
-
-    exec(cmd, (error, stdout, stderr) => {
-        if (error) vscode.window.showErrorMessage(`${stderr.trim()}`);
-        else vscode.window.showInformationMessage(`${stdout.trim()}`);
-    });
+    const pyProg = createVSCodeTerminal(basePath);
+    const command = `python "${filePath}"`
+    pyProg.show();
+    pyProg.sendText(command);
 }
 
 /** An LRUCache that is used for handling the number of files for context. */
@@ -257,8 +251,7 @@ module.exports = {
     highlightFilenameMentions,
     getFileNames,
     getNonce,
-    sanitizeProgram,
+    getAllRunnablePrograms,
     runPythonFile,
-    killProcess,
     LRUCache
 }

@@ -2,7 +2,7 @@
   "name": "ai-chat",
   "displayName": "ai-chat",
   "description": "An AI Chat using OpenRouter",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -83,13 +83,6 @@
           "minimum": 1,
           "maximum": 20,
           "description": "The length of interaction history used for context."
-        },
-        "AI-Chat.TimeoutLength": {
-          "type": "number",
-          "default": 180,
-          "minimum": 15,
-          "maximum": 600,
-          "description": "Maximum time a Python program can run using Agent Mode (in seconds)."
         }
       }
     }

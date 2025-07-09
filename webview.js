@@ -18,14 +18,12 @@ let maxFiles = 3;
 let prevPrompt = "";
 let baseWorkspacePath = null;
 let lastCursorPosition = 0;
-let maximumVal = 0;
 let fileTitlesWithLocations = {};
 let mentionedFiles = {};
 let contextedFilesStorage = [];
 let queue = [];
 let lastMatching = 0;
 let alreadyMatched = {};
-let linkCodeWithButton = {};
 
 const createNumberOfFiles = (fileCount) => {
     const files = document.createElement('div');
@@ -114,17 +112,10 @@ const generateRunButton = (key) => {
     runButton.classList.add('interactive-button');
 
     runButton.onclick = () => {
-        if (runButton.innerText == 'Run') {
-            vscode.postMessage({ command: "runProgram", key });
-            runButton.disabled = true;
-        } else {
-            vscode.postMessage({ command: 'killProcess', key });
-            runButton.remove();
-            delete linkCodeWithButton[key];
-        }
+        vscode.postMessage({ command: "runProgram", key });
+        runButton.remove()
     };
 
-    linkCodeWithButton[key] = runButton;
     return runButton;
 }
 
@@ -536,7 +527,6 @@ window.addEventListener("message", (e) => {
     } else if (command == 'history') {
         if (value) responseArea.replaceChildren(responseArea.lastElementChild);
         else responseArea.replaceChildren();
-        if (!value) linkCodeWithButton = {};
     } else if (command == 'cancelView') {
         if (value) {
             ask.classList.replace("ask-chat", "cancel-response");
@@ -572,36 +562,5 @@ window.addEventListener("message", (e) => {
         llmMode.value = `${agent}`;
         llmSelect.value = index;
         maxFiles = fileSize;
-    } else if (command == 'disableKill') {
-        const button = linkCodeWithButton[key];
-        if (!button) return;
-        button.remove();
-        delete linkCodeWithButton[key];
-    } else if (command == 'programRun') {
-        const button = linkCodeWithButton[key];
-        if (!button) return;
-        if (!value) {
-            delete linkCodeWithButton[key];
-            return;
-        }
-        button.innerText = "Kill";
-        button.style.backgroundColor = "red";
-        button.disabled = false;
-    } else if (command == 'programOutput') {
-        const button = linkCodeWithButton[key];
-        if (!button) return;
-        const container = button.parentNode.parentNode;
-        if (!container) return;
-
-        if (value) {
-            const outputBox = document.createElement("code");
-            outputBox.classList.add("output");
-            outputBox.classList.add("hljs");
-            outputBox.textContent += text;
-            container.appendChild(outputBox);
-        } else {
-            const outputBox = container.querySelector(".output");
-            outputBox.textContent += text;
-        }
     }
 });

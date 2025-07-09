@@ -12,8 +12,7 @@ const {
     getNonce,
     LRUCache,
     runPythonFile,
-    sanitizeProgram,
-    killProcess
+    getAllRunnablePrograms,
 } = require("./functions");
 
 const userQuestions = [];
@@ -33,17 +32,14 @@ let llmIndex = 0;
 let writeToFile = false;
 let outputFileName = "output";
 let fileTitles = {};
-let currenlyResponding = false;
+let currentlyResponding = false;
 let continueResponse = true;
 let agentMode = false;
 let queuedChanges = [];
 
 let runnablePrograms = {}
-let runningPIDs = {};
-let programStartIndex = 0;
 let lastCalled = 0;
 let interactionHistory = 5;
-let timeoutLength = 180;
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
@@ -70,7 +66,10 @@ SHOW ${token} ANYWHERE ELSE IN THE RESPONSE EXCEPT ENCLOSING YOUR GENERATED FUNC
 IF NEEDED, ONLY GIVE MAXIMUM 2 SENTENCES. VERIFY THAT YOU ARE FOLLOWING ALL OF THESE RULES WHEN STREAMING YOUR RESPONSE. MAKE SURE, TRIPLE CHECK THAT THE PROGRAM HAS THE 
 TOKEN BARRIER, AND FOLLOWS THE CORRECT BLUEPRINT AS THE EXAMPLE PROGRAM. ALSO, THE BASE PATH IS PROVIDED AS AN ENV VARIABLE AS WELL, WITH THE NAME 'BASE_WORKSPACE_PATH', MAKE SURE TO USE IT,
 AS THE PROGRAM WILL BE RUNNING FROM A DIFFERENT DIRECTORY. MAKE SURE THAT YOU ARE RUNNING YOUR PROGRAM IN THE BASE DIRECTORY, AND ALWAYS SPECIFY WHERE THE BASE WORKSPACE IS, AND IF NEEDED, 
-DEFAULT TO THE BASE WORKSPACE PATH GIVEN IN YOUR SYSTEM PROMPTS.
+DEFAULT TO THE BASE WORKSPACE PATH GIVEN IN YOUR SYSTEM PROMPTS. If asked to do multiple things, break the program into smaller parts instead of one large program, and make sure that if they 
+are run in order, that it will achieve what the user wants. For example, if the user asks for something like "Create a React project, then make it a tic-tac-toe game", it will be broken up into 
+two parts, the first program being creating the React project, and the second being fulfilling the tic-tac-toe requirement. When running something through a command prompt, make sure to run it 
+through a shell. The user's operating system platform is: ${process.platform}
 `
 
 let llms = [];
@@ -102,7 +101,6 @@ const getConfigData = async (event=null) => {
     llmIndex = Math.min(llmIndex, length - 1);
     fileHistory.changeSize(config.get("FileContextSize", 3));
     interactionHistory = config.get("InteractionHistorySize", 5);
-    timeoutLength = config.get("TimeoutLength", 180);
 }
 
 const isChanged = (value, event) => {
@@ -123,23 +121,16 @@ const updateQueuedChanges = () => {
     queuedChanges = [];
 }
 
-const generateProgram = (panel, stream, currentTime=Date.now()) => {
-    if (currentTime - lastCalled < 2000) return;
+const generateProgram = (panel, stream, currentTime=Date.now(), final=false) => {
+    if (currentTime - lastCalled < 2000 && !final) return;
     lastCalled = currentTime;
 
-    const initialIndex = stream.indexOf(token, programStartIndex);
-    if (initialIndex == -1) return;
-    const endIndex = stream.indexOf(token, initialIndex + token.length);
-    if (endIndex == -1) return;
-
-    let pyProg = stream.substring(initialIndex + token.length, endIndex);
-    pyProg = sanitizeProgram(pyProg);
-    if (!pyProg) return;
-
-    const key = crypto.randomUUID();
-    runnablePrograms[key] = pyProg;
-    panel.webview.postMessage({ command: 'pythonProg', text: pyProg, key });
-    programStartIndex = endIndex + token.length;
+    const programs = getAllRunnablePrograms(stream, token, final);
+    for (const prog of programs) {
+        const key = crypto.randomUUID();
+        runnablePrograms[key] = prog;
+        panel.webview.postMessage({ command: 'pythonProg', text: prog, key });
+    }
 }
 
 const sendStream = (panel, stream, final=false, key=null) => {
@@ -148,7 +139,7 @@ const sendStream = (panel, stream, final=false, key=null) => {
     } else if (panel && panel.webview) {
         let showData = stream.replaceAll(token, "");
         panel.webview.postMessage({ command: "response", text: converter.makeHtml(showData), value: final, key });
-        agentMode && generateProgram(panel, stream);
+        agentMode && generateProgram(panel, stream, undefined, final);
     }
 };
 
@@ -231,7 +222,6 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             }
 
         } else {
-            agentMode && generateProgram(panel, totalResponse, lastCalled + 3500);
             sendStream(panel, totalResponse, true, key);
         }
 
@@ -445,6 +435,14 @@ class AIChatViewProvider {
         this.updateFileList(false);
     }
 
+    inProgress() {
+        if (!this._view || !this._view.webview) return;
+        if (currentlyResponding) {
+            this._view.webview.postMessage({ command: "chat", text: userQuestions.at(-1) });
+            this._view.webview.postMessage({ command: "loading", text: this._getSpinner() });
+        }
+    }
+
     resolveWebviewView(webviewView, _token) {
         this._view = webviewView;
 
@@ -465,10 +463,11 @@ class AIChatViewProvider {
                     webviewView.webview.html = this._getHtmlForWebview();
                     this.interactions = questionsAndResponses.length;
                 }
+                this.inProgress();
                 this.updateWorkspacePath();
                 this.updatePageValues();
                 this.updateFileList(false);
-                this._view.webview.postMessage({ command: 'focus' });
+                webviewView.webview.postMessage({ command: 'focus' });
             } else {
                 textFromFile = "";
             }
@@ -476,7 +475,7 @@ class AIChatViewProvider {
 
         webviewView.webview.onDidReceiveMessage(async (message) => {
             if (message.command === "chat") {
-                if (currenlyResponding) return;
+                if (currentlyResponding) return;
                 
                 promptValue = "";
                 currentMentionedFiles = {};
@@ -502,7 +501,7 @@ class AIChatViewProvider {
 
                 this.loading();                
                 webviewView.webview.postMessage({ command: 'content', text: '' });
-                currenlyResponding = true;
+                currentlyResponding = true;
 
                 const messages = await generateMessages(text, textFromFile);
                 webviewView.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache) });
@@ -512,8 +511,7 @@ class AIChatViewProvider {
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
 
                 updateQueuedChanges();
-                currenlyResponding = false;
-                programStartIndex = 0;
+                currentlyResponding = false;
                 lastCalled = 0;
             } else if (message.command === 'copy') {
                 await vscode.env.clipboard.writeText(message.text);
@@ -522,22 +520,24 @@ class AIChatViewProvider {
             } else if (message.command === 'remove') {
                 textFromFile = "";
             } else if (message.command === 'clearHistory') {
-                webviewView.webview.postMessage({ command: 'history', value: currenlyResponding });
+                webviewView.webview.postMessage({ command: 'history', value: currentlyResponding });
                 questionsAndResponses = [];
                 runnablePrograms = {};
             } else if (message.command === 'stopResponse') {
                 continueResponse = false;
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
             } else if (message.command === 'outputToFile') {
-                if (currenlyResponding) queuedChanges.push([message.command, message.checked]);
+                if (currentlyResponding) queuedChanges.push([message.command, message.checked]);
                 else writeToFile = message.checked;
             } else if (message.command === 'fileContext') {
                 fileHistory.delete(message.key);
             } else if (message.command === 'runProgram') {
                 const file = runnablePrograms[message.key];
-                await runPythonFile(message.key, file, runningPIDs, webviewView, timeoutLength);
+                if (!file) return;
+                delete runnablePrograms[message.key]
+                await runPythonFile(file);
             } else if (message.command === 'changeMode') {
-                if (currenlyResponding) queuedChanges.push([message.command, message.value]);
+                if (currentlyResponding) queuedChanges.push([message.command, message.value]);
                 else agentMode = message.value == 'false' ? false : true;
             } else if (message.command === 'updatePrompt') {
                 promptValue = message.value;
@@ -547,12 +547,6 @@ class AIChatViewProvider {
                 if (index == -1) return;
                 questionsAndResponses.splice(index, 1);
                 this.interactions = questionsAndResponses.length - 1;
-                delete runningPIDs[message.key];
-            } else if (message.command === 'killProcess') {
-                const pid = runningPIDs[message.key];
-                if (!pid || pid == 0 || pid == 1) return;
-                killProcess(pid);
-                delete runningPIDs[message.key];
             } else if (message.command === 'openSettings') {
                 await vscode.commands.executeCommand("workbench.action.openSettings", "AI-Chat")
             } else if (message.command === 'refreshFiles') {
