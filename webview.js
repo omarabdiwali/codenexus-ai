@@ -149,7 +149,6 @@ const generateButtons = (codeBlock, currentTime) => {
     const codeKey = codeBlock.textContent.trim();
 
     if (currentTime && currentTime - lastMatching > 1000 && !(codeKey in alreadyMatched)) {
-        console.log(queue);
         lastMatching = currentTime;
         for (const [key, value] of queue) {
             if (comapreCodeBlock(codeBlock.textContent.trim(), value.trim())) {
