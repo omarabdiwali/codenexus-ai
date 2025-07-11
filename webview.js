@@ -12,6 +12,7 @@ const contextFiles = document.getElementById('context-files');
 const llmMode = document.getElementById('mode-select')
 const settings = document.getElementById('open-settings');
 const refreshFiles = document.getElementById('refresh-files');
+const updateKey = document.getElementById('api-key');
 const regEx = new RegExp(/[\b\@][\w\.]*\.[a-zA-Z]+\b/g);
 
 let maxFiles = 3;
@@ -147,7 +148,8 @@ const generateButtons = (codeBlock, currentTime) => {
     buttonDiv.appendChild(copyButton);
     const codeKey = codeBlock.textContent.trim();
 
-    if (currentTime != null && currentTime - lastMatching > 1000 && !(codeKey in alreadyMatched)) {
+    if (currentTime && currentTime - lastMatching > 1000 && !(codeKey in alreadyMatched)) {
+        console.log(queue);
         lastMatching = currentTime;
         for (const [key, value] of queue) {
             if (comapreCodeBlock(codeBlock.textContent.trim(), value.trim())) {
@@ -468,9 +470,14 @@ refreshFiles.addEventListener("click", () => {
     vscode.postMessage({ command: "refreshFiles" });
 })
 
+updateKey.addEventListener("click", () => {
+    vscode.postMessage({ command: 'updateApiKey' });
+})
+
 prompt.addEventListener("keydown", (event) => {
     if (event.key == "Enter" && !event.shiftKey && ask.innerText == "Ask" && !ask.disabled) {
         event.preventDefault();
+        queue = [];
         ask.click();
     } else if (event.code == "Backspace") {
         verifyMentionedFiles();
@@ -536,7 +543,6 @@ window.addEventListener("message", (e) => {
             ask.classList.replace("cancel-response", "ask-chat");
             ask.innerText = "Ask";
             ask.disabled = false;
-            queue = [];
             lastMatching = 0;
             alreadyMatched = {};
         }

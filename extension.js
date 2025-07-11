@@ -121,7 +121,7 @@ const updateQueuedChanges = () => {
     queuedChanges = [];
 }
 
-const generateProgram = (panel, stream, currentTime=Date.now(), final=false) => {
+const generateProgram = (panel, stream, final=false, currentTime=Date.now()) => {
     if (currentTime - lastCalled < 2000 && !final) return;
     lastCalled = currentTime;
 
@@ -138,8 +138,8 @@ const sendStream = (panel, stream, final=false, key=null) => {
         sendToFile(stream, outputFileName);
     } else if (panel && panel.webview) {
         let showData = stream.replaceAll(token, "");
+        agentMode && generateProgram(panel, stream, final);
         panel.webview.postMessage({ command: "response", text: converter.makeHtml(showData), value: final, key });
-        agentMode && generateProgram(panel, stream, undefined, final);
     }
 };
 
@@ -490,7 +490,7 @@ class AIChatViewProvider {
                     webviewView.webview.postMessage({ command: 'chat', text: userQuestion });
                 }
                 
-                if (writeToFile) sendStream(webviewView, "## " + userQuestion + "\n\n");
+                if (writeToFile) sendToFile("## " + userQuestion + "\n\n", outputFileName);
 
                 let text = message.text;
                 for (const [index, info] of Object.entries(message.mentionedFiles)) {
@@ -552,6 +552,8 @@ class AIChatViewProvider {
             } else if (message.command === 'refreshFiles') {
                 fileTitles = await getAllFiles();
                 webviewView.webview.postMessage({ command: 'fileTitles', value: fileTitles });
+            } else if (message.command === 'updateApiKey') {
+                await vscode.commands.executeCommand('ai-chat.changeApiKey');
             }
         });
     }
@@ -634,6 +636,7 @@ class AIChatViewProvider {
                         </div>
                         <button id="clear-history">Clear History</button>
                         <button title="Refresh files" class="options" id="refresh-files"><i class="fas fa-solid fa-sync-alt icon"></i></button>
+                        <button title="Update API Key" class="options" id="api-key"><i class="fas fa-key icon"></i></button>
                         <button title="Settings" class="options" id="open-settings"><i class="fas fa-cog icon"></i></button>
                     </div>
                     
