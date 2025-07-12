@@ -218,7 +218,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             sendToFile(`\n\n**${runTime}**\n\n`, outputFileName);
 
             if (panel && panel.webview) {
-                panel.webview.postMessage({ command: "response", text: converter.makeHtml(webviewResponse) });
+                panel.webview.postMessage({ command: "response", text: converter.makeHtml(webviewResponse), value: true, key });
             }
 
         } else {
@@ -325,13 +325,7 @@ async function activate(context) {
 
     const openChatShortcut = vscode.commands.registerCommand('ai-chat.openChatWithSelection', async () => {
         const editor = vscode.window.activeTextEditor;
-        let text = "";
-
-        if (editor) {
-            const selection = editor.selection;
-            text = editor.document.getText(selection);
-        }
-        
+        const text = editor ? editor.document.getText(editor.selection) : "";
         await vscode.commands.executeCommand('ai-chat.chat.focus', text);
     });
 
@@ -380,6 +374,7 @@ class AIChatViewProvider {
     }
 
     async handleIncomingData(data) {
+        if (!this._view || !this._view.webview) return;
         let trimmed = data.replaceAll("\n", "").replaceAll(" ", "");
         
         if (trimmed.length > 0) {
@@ -440,6 +435,7 @@ class AIChatViewProvider {
         if (currentlyResponding) {
             this._view.webview.postMessage({ command: "chat", text: userQuestions.at(-1) });
             this._view.webview.postMessage({ command: "loading", text: this._getSpinner() });
+            this._view.webview.postMessage({ command: "cancelView", value: true });
         }
     }
 
