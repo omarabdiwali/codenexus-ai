@@ -69,16 +69,15 @@ ABLE TO GENERATE MULTIPLE PROGRAMS IF NEEDED, and EVERYTIME YOU GENERATE THEM, m
 THAT YOUR CODE BLOCK IS ALSO ENCLOSED using ${backticks}, with an example program looking like: ${token}\n${backticks}{program....}${backticks}\n${token}. DO NOT, I REPEAT, DO NOT 
 SHOW ${token} ANYWHERE ELSE IN THE RESPONSE EXCEPT ENCLOSING YOUR GENERATED FUNCTION, NOT EVEN IN YOUR EXPLANATION. ALSO, for generated code, KEEP YOUR EXPLANATION TO A MINIMUM, AND 
 IF NEEDED, ONLY GIVE MAXIMUM 2 SENTENCES. VERIFY THAT YOU ARE FOLLOWING ALL OF THESE RULES WHEN STREAMING YOUR RESPONSE. MAKE SURE, TRIPLE CHECK THAT THE PROGRAM HAS THE 
-TOKEN BARRIER, AND FOLLOWS THE CORRECT BLUEPRINT AS THE EXAMPLE PROGRAM. ALSO, THE BASE PATH IS PROVIDED AS AN ENV VARIABLE AS WELL, WITH THE NAME 'BASE_WORKSPACE_PATH', MAKE SURE TO USE IT,
-AS THE PROGRAM WILL BE RUNNING FROM A DIFFERENT DIRECTORY. MAKE SURE THAT YOU ARE RUNNING YOUR PROGRAM IN THE BASE DIRECTORY, AND ALWAYS SPECIFY WHERE THE BASE WORKSPACE IS, AND IF NEEDED, 
-DEFAULT TO THE BASE WORKSPACE PATH GIVEN IN YOUR SYSTEM PROMPTS. If asked to do multiple things, break the program into smaller parts instead of one large program, and make sure that if they 
-are run in order, that it will achieve what the user wants. For example, if the user asks for something like "Create a React project, then make it a tic-tac-toe game", it will be broken up into 
-two parts, the first program being creating the React project, and the second being fulfilling the tic-tac-toe requirement. When running something through a command prompt, make sure to run it 
-through a shell. The user's operating system platform is: ${process.platform}
+TOKEN BARRIER, AND FOLLOWS THE CORRECT BLUEPRINT AS THE EXAMPLE PROGRAM. ALSO, THE BASE PATH IS PROVIDED AS AN ENV VARIABLE AS WELL, WITH THE NAME 'BASE_WORKSPACE_PATH'. If asked to do multiple things, 
+break the program into smaller parts instead of one large program, and make sure that if they are run in order, that it will achieve what the user wants. For example, if the user asks for something like 
+"Create a React project, then make it a tic-tac-toe game", it will be broken up into two parts, the first program being creating the React project, and the second being fulfilling the tic-tac-toe requirement. 
+When running something through a command prompt, make sure to run it through a shell. The user's operating system platform is: ${process.platform}
 `
 
 let llms = [];
 let llmNames = [];
+let customSystemPrompt = "";
 
 const fileConfigChange = async (config, provider) => {
     const included = config.get("FilesIncluded", defaultInclude);
@@ -119,6 +118,7 @@ const getConfigData = async (event=null, provider=null) => {
     interactionHistory = config.get("ContextInteractionSize", 5);
     include = config.get("FilesIncluded", "");
     exclude = config.get("FilesExcluded", defaultExclude);
+    customSystemPrompt = config.get("SystemPrompt", "").trim();
 }
 
 const isChanged = (value, event) => {
@@ -139,7 +139,8 @@ const updateQueuedChanges = () => {
     queuedChanges = [];
 }
 
-const generateProgram = (panel, stream, final=false, currentTime=Date.now()) => {
+const generateProgram = (panel, stream, final) => {
+    const currentTime = Date.now();
     if (currentTime - lastCalled < 2000 && !final) return;
     lastCalled = currentTime;
 
@@ -152,13 +153,10 @@ const generateProgram = (panel, stream, final=false, currentTime=Date.now()) => 
 }
 
 const sendStream = (panel, stream, final=false, key=null) => {
-    if (writeToFile) {
-        sendToFile(stream, outputFileName);
-    } else if (panel && panel.webview) {
-        let showData = stream.replaceAll(token, "");
-        agentMode && generateProgram(panel, stream, final);
-        panel.webview.postMessage({ command: "response", text: converter.makeHtml(showData), value: final, key });
-    }
+    if (!panel || !panel.webview) return;
+    const showData = stream.replaceAll(token, "");
+    agentMode && generateProgram(panel, stream, final);
+    panel.webview.postMessage({ command: "response", text: converter.makeHtml(showData), value: final, key });
 };
 
 const addMessage = (messages, role, content) => {
@@ -180,6 +178,7 @@ const generateMessages = async (chat, mentionedCode) => {
     }
 
     agentMode && addMessage(messages, 'system', systemMessage);
+    customSystemPrompt.length && addMessage(messages, 'system', customSystemPrompt);
     
     if (fileHistory.size() > 0) {
         const files = await fileHistory.getTextFile();

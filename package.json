@@ -93,6 +93,11 @@
           "type": "string",
           "default": "",
           "description": "Files you want the extension to access using glob patterns in the working directory: (https://code.visualstudio.com/docs/editor/glob-patterns) (empty access everything)."
+        },
+        "AI-Chat.SystemPrompt": {
+          "type": "string",
+          "default": "",
+          "description": "Custom system prompt, which will be added in addition to the 'Agent' prompt when in Agent Mode."
         }
       }
     }
