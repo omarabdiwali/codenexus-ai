@@ -13,6 +13,7 @@ const {
     LRUCache,
     runPythonFile,
     getAllRunnablePrograms,
+    debounce,
 } = require("./functions");
 
 const userQuestions = [];
@@ -20,6 +21,8 @@ const questionHistory = [];
 const responseHistory = [];
 const duplicatedFiles = new Set();
 const fileHistory = new LRUCache(3);
+const defaultInclude = "";
+const defaultExclude = "{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}";
 
 let questionsAndResponses = [];
 let previousResponse = "";
@@ -40,6 +43,8 @@ let queuedChanges = [];
 let runnablePrograms = {}
 let lastCalled = 0;
 let interactionHistory = 5;
+let include = defaultInclude;
+let exclude = defaultExclude;
 
 const converter = new showdown.Converter();
 converter.setOption("tables", true);
@@ -75,7 +80,16 @@ through a shell. The user's operating system platform is: ${process.platform}
 let llms = [];
 let llmNames = [];
 
-const updateConfig = async (event) => {
+const fileConfigChange = async (config, provider) => {
+    const included = config.get("FilesIncluded", defaultInclude);
+    const excluded = config.get("FilesExcluded", defaultExclude);
+    fileTitles = await getAllFiles(included, excluded, defaultInclude, defaultExclude);
+    provider.updateFileList();
+}
+
+const configChangeDebounce = debounce(fileConfigChange, 1500);
+
+const updateConfig = async (event, provider) => {
     const config = vscode.workspace.getConfiguration("AI-Chat");
     if (isChanged("Models", event)) {
         const models = config.get("Models", []);
@@ -85,11 +99,13 @@ const updateConfig = async (event) => {
         const modelNames = config.get("ModelNames", []);
         const validNames = modelNames.filter((val) => val.trim().length != 0);
         if (modelNames.length != validNames.length) await config.update("ModelNames", validNames);
+    } else if (isChanged("FilesIncluded", event) || isChanged("FilesExcluded", event)) {
+        configChangeDebounce(config, provider);
     }
 }
 
-const getConfigData = async (event=null) => {
-    event && await updateConfig(event);
+const getConfigData = async (event=null, provider=null) => {
+    event && await updateConfig(event, provider);
     const config = vscode.workspace.getConfiguration("AI-Chat");
     
     const models = config.get("Models", []).filter((val) => val.trim().length != 0);
@@ -99,8 +115,10 @@ const getConfigData = async (event=null) => {
     llms = models.slice(0, length);
     llmNames = modelNames.slice(0, length);
     llmIndex = Math.min(llmIndex, length - 1);
-    fileHistory.changeSize(config.get("FileContextSize", 3));
-    interactionHistory = config.get("InteractionHistorySize", 5);
+    fileHistory.changeSize(config.get("ContextFileSize", 3));
+    interactionHistory = config.get("ContextInteractionSize", 5);
+    include = config.get("FilesIncluded", "");
+    exclude = config.get("FilesExcluded", defaultExclude);
 }
 
 const isChanged = (value, event) => {
@@ -331,7 +349,7 @@ async function activate(context) {
 
     vscode.workspace.onDidChangeConfiguration(async (event) => {        
         if (event.affectsConfiguration("AI-Chat")) {
-            await getConfigData(event);
+            await getConfigData(event, provider);
             provider.updateHTML();
         }
     })
@@ -342,15 +360,21 @@ async function activate(context) {
         openChatShortcut
     );
 
-    fileTitles = await getAllFiles();
+    fileTitles = await getAllFiles(include, exclude, defaultInclude, defaultExclude);
+
     const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.*', false, true, false);
-    fileWatcher.onDidCreate(async (uri) => {
-        fileTitles = await getAllFiles();
+    const getFilesOnChange = async () => {
+        fileTitles = await getAllFiles(include, exclude, defaultInclude, defaultExclude);
         provider.updateFileList();
+    }
+
+    const debounceWatcher = debounce(getFilesOnChange, 1000)
+
+    fileWatcher.onDidCreate(async (uri) => {
+        debounceWatcher();
     });
     fileWatcher.onDidDelete(async (uri) => {
-        fileTitles = await getAllFiles();
-        provider.updateFileList();
+        debounceWatcher();
     });
 }
 
@@ -546,7 +570,7 @@ class AIChatViewProvider {
             } else if (message.command === 'openSettings') {
                 await vscode.commands.executeCommand("workbench.action.openSettings", "AI-Chat")
             } else if (message.command === 'refreshFiles') {
-                fileTitles = await getAllFiles();
+                fileTitles = await getAllFiles(include, exclude, defaultInclude, defaultExclude);
                 webviewView.webview.postMessage({ command: 'fileTitles', value: fileTitles });
             } else if (message.command === 'updateApiKey') {
                 await vscode.commands.executeCommand('ai-chat.changeApiKey');

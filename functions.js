@@ -10,12 +10,32 @@ const getFilePath = (filename, fileType='md') => {
 }
 
 /** Gets all the files in the current workspace directory. */
-const getAllFiles = async () => {
-    const include = ''
-    const exclude = '{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}';
-    const allFiles = await vscode.workspace.findFiles(include, exclude);
-    return getFileNames(allFiles);
+const getAllFiles = async (include, exclude, defaultInclude, defaultExclude) => {
+    try {
+        const allFiles = await vscode.workspace.findFiles(include, exclude);
+        return getFileNames(allFiles);
+    } catch (e) {
+        const allFiles = await vscode.workspace.findFiles(defaultInclude, defaultExclude);
+        return getFileNames(allFiles);
+    }
 }
+
+/** Debounce function to stop repetitve calls to `getAllFiles`. */
+const debounce = (func, wait) => {
+    let timeout;
+    let lastPromise = null;
+    return async (...args) => {
+        const context = this;
+        const later = async () => {
+            timeout = null;
+            lastPromise = await func.apply(context, args);
+        };
+
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+        return lastPromise;
+    };
+};
 
 /** Writes content to a file in the workspace. */
 const sendToFile = (content, filename) => {
@@ -246,6 +266,7 @@ class LRUCache {
 module.exports = {
     getFilePath,
     getAllFiles,
+    debounce,
     sendToFile,
     replaceFileMentions,
     highlightFilenameMentions,

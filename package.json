@@ -70,19 +70,29 @@
           "default": ["google/gemma-3-27b-it:free", "qwen/qwen3-32b:free", "microsoft/mai-ds-r1:free"],
           "description": "Unique IDs of the Large Language Models from OpenRouter (list Models and Model Names in the same order)."
         },
-        "AI-Chat.FileContextSize": {
+        "AI-Chat.ContextFileSize": {
           "type": "number",
           "default": 3,
           "minimum": 1,
           "maximum": 20,
           "description": "Maximum number of files that can be kept for context."
         },
-        "AI-Chat.InteractionHistorySize": {
+        "AI-Chat.ContextInteractionSize": {
           "type": "number",
           "default": 5,
           "minimum": 1,
           "maximum": 20,
           "description": "The length of interaction history used for context."
+        },
+        "AI-Chat.FilesExcluded": {
+          "type": "string",
+          "default": "{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}",
+          "description": "Files you want excluded from being accessed by the extension in the working directory using glob patterns: (https://code.visualstudio.com/docs/editor/glob-patterns)."
+        },
+        "AI-Chat.FilesIncluded": {
+          "type": "string",
+          "default": "",
+          "description": "Files you want the extension to access using glob patterns in the working directory: (https://code.visualstudio.com/docs/editor/glob-patterns) (empty access everything)."
         }
       }
     }
