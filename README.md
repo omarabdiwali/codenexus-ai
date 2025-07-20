@@ -1,83 +1,105 @@
-# ai-chat vscode extension
+# 🤖 AI Chat - Intelligent Code Assistant for VSCode
 
-This VSCode extension allows the users to be able to ask multiple LLMs questions about their code. 
+![VSCode Extension](https://img.shields.io/badge/Visual_Studio_Code-0078D4?style=for-the-badge&logo=visual%20studio%20code&logoColor=white)
+![OpenRouter Integration](https://img.shields.io/badge/OpenRouter-4B32C3?style=for-the-badge)
+![Python Required](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
 
-It allows users to mention open files using `@filename.ext` with custom autocomplete functionality, and answer the question based on the code. They are able to pick from 5 different LLMs, which are free, and switches between them if there is an error with the selected LLM. Also, it gives the user the ability to highlight part of a file, and use the keyboard shortcut `Ctrl+K` in order to open the extension and mention the highlighted text automatically.
+A powerful VSCode extension that brings multi-LLM intelligence to your coding workflow, with advanced context awareness and code execution capabilities.
 
+![Extension Demo](https://i.imgur.com/kxoblg6.png)
 
-![File Autocomplete](https://i.imgur.com/kxoblg6.png)
+## ✨ Features
 
+- **Multi-LLM Support**: Switch between 5 different language models with automatic fallback
+- **Code Context Awareness**:
+  - `@filename` syntax with auto-complete
+  - LRU cached file context (3-file memory)
+  - Highlight-to-chat integration (Ctrl+K/Cmd+K)
+- **Agent Mode**: 
+  - Safe code execution environment
+  - Python program generation/validation
+  - Real-time code execution results
+- **Conversation Management**:
+  - 5-message history retention
+  - One-click history clearance
+- **OpenRouter Integration**: 
+  - Secure API key management with automatic validation
 
-The extension also has an 'Agent' Mode, where the user can ask the LLM to do something that requires a program to be run, such as creating a file, and the LLM will respond with a Python program that will execute what the user wants. With this Python program, the user will be able to run it from the extension, where the extension will check for dangerous code, then write the program to a Python file within the base directory, and will execute the code. For Agent Mode to work, the system needs to have `Python` installed, and accessible from the terminal using `python --version`.
+## 🚀 Quick Start
 
+### Prerequisites
+- Node.js 16+
+- Python 3.8+ (for Agent Mode)
+- [OpenRouter API Key](https://openrouter.ai/)
 
-![Agent Mode](https://i.imgur.com/tUTP5F8.png)
+### Installation
+```bash
+git clone https://github.com/omarabdiwali/vscode-ai-chat.git
+npm install -g @vscode/vsce
+cd ai-chat
+vsce package
+code --install-extension ai-chat-*.vsix
+```
 
+## 🛠️ Usage
 
-The extension also retains the last 5 interactions between the user and the LLM, and can be cleared using the "Clear History" button. When a file is mentioned in a prompt, it is also saved for context, using an LRU cache that is currently limited to 3 files. To remove them from the context, users are able to cancel them from the display above the prompt textarea.
+### Basic Chat
+1. Open the extension from the activity bar.
+2. Use `@filename` to reference open files
+3. Highlight code + Ctrl/K for instant context
 
-To be able to call the LLMs, it uses `OpenRouter`, so in order to be able to use the extension, you will need an OpenRouter API key, which the extension will ask for when you open it for the first time.
+### Agent Mode
+![Agent Mode Demo](https://i.imgur.com/tUTP5F8.png)
+1. Start query with "Please create..." or "Write a program to..."
+2. Review generated Python code
+3. Click "Run" for safe execution
 
+### Context Management
+- Click `×` on file tags to remove from context
+- Use "Clear History" button to reset conversation
 
-![File Output](https://i.imgur.com/uCOJMvD.png)
+## ⚙️ Configuration
+1. First launch automatically prompts for API key
+2. Update key from the extension webview or via command: `AI Chat: Change API Key`
 
+**Additional Optional Configuration**:
+  - `Context File Size`: Maximum number of files that can be kept for context (LRU size).
+  - `Context Interaction Size`: The length of interaction history used for context.
+  - `Files Excluded`: Files you want excluded from being accessed by the extension in the working directory using [glob patterns](https://code.visualstudio.com/docs/editor/glob-patterns).
+  - `Files Included`: Files you want the extension to access using [glob patterns](https://code.visualstudio.com/docs/editor/glob-patterns) in the working directory (empty access everything).
+  - `Model Names`: Names of the large language models using [OpenRouter](https://openrouter.ai/models).
+  - `Models`: Unique IDs of the large language models from [OpenRouter](https://openrouter.ai/models) (list Models and Model Names in the same order).
+  - `System Prompt`: Custom system prompt, which will be added in addition to the 'Agent' prompt when in Agent Mode.
 
-## Local Installation and Usage
+  These configuration options can be accessed from the settings button on the webview or through the user's settings page, under `AI-Chat`.
 
-* Run `npm i` inside the extension directory to download all the needed libraries
-* In your terminal, outside of the extension directory, run `npm install -g @vscode/vsce`. This package will allow you to build the extension.
-* Move into the extension directory, and run `vsce package`. It will have 2 prompts, answer them and it will create a `.vsix` file.
-* After doing the previous step, run `code --install-extension ai-chat-${version-number}.vsix`. This should install the extension.
-* If everything is done correctly, you will be able to see the extension in the Activity Bar, and have the ability to highlight part of a file and use `Ctrl+K or Cmd+K` to mention it. To change the API key, click `AI Chat: Change API Key` to update it.
+## 📂 Project Structure
+| File             | Purpose                                  |
+|------------------|------------------------------------------|
+| `extension.js`   | Main extension logic & VSCode integration|
+| `webview.js`     | Chat UI & message handling               |
+| `functions.js`   | Utilities & core functionality           |
+| `styles.css`     | Visual styling                           |
+| `spinner.css`    | Loading animation                        |
 
-## What's in the folder
+## 🛡️ Safety Features
+- Code execution sandboxing
+- Dangerous pattern detection in generated code
+- Automatic Python environment cleanup
 
-* This folder contains all of the files necessary for your extension.
-* `package.json` - this is the manifest file in which you declare your extension and command.
-  * The sample plugin registers a command and defines its title and command name. With this information VS Code can show the command in the command palette. It doesn’t yet need to load the plugin.
-* `extension.js` - this is the main file where you will provide the implementation of your command.
-  * The file exports one function, `activate`, which is called the very first time your extension is activated (in this case by executing the command). Inside the `activate` function we call `registerCommand`.
-  * We pass the function containing the implementation of the command as the second parameter to `registerCommand`.
-* `webview.js` - this file holds the code that handles the implementation of the chat panel.
-  * The file has all the needed components and functions that is used by the webview panel, and handles the talking to `extension.js` using VSCode's postMessage.
-* `functions.js` - a utility file containing reusable functions for the extension. Provides functionality for:
-  * File path construction and validation (getFilePath, sendToFile)
-  * Text processing and replacement for file mentions (replaceFileMentions, highlightFilenameMentions)
-  * File content extraction and handling (addFileToPrompt, getFileNames)
-  * Error handling and user notification for file operations
-  * Nonce generation (getNonce)
-  * Evaluation of generated Python programs, and ability to run them (checkCodeForDangerousPatterns, sanitizeProgram, runPythonFile)
-  * A LRU Cache class used to limit the number of retained files (LRUCache)
-* `styles.css`, `spinner.css` - these CSS files hold the styling for the webview panel, and the loading spinner.
+## 🤝 Contributing
+We welcome contributions! Please follow our guidelines:
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/your-feature`)
+3. Commit changes
+4. Push to branch
+5. Open PR with detailed description
 
-## Get up and running straight away
+## 📄 License
+MIT License - See [LICENSE](LICENSE) for details
 
-* Press `F5` to open a new window with your extension loaded.
-* Run your command from the command palette by pressing (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and typing `AI Chat: Chat with AI`.
-* Set breakpoints in your code inside `extension.js` to debug your extension.
-* Find output from your extension in the debug console..
+---
 
-## Make changes
-
-* You can relaunch the extension from the debug toolbar after changing code in `extension.js`.
-* You can also reload (`Ctrl+R` or `Cmd+R` on Mac) the VS Code window with your extension to load your changes.
-
-## Explore the API
-
-* You can open the full set of our API when you open the file `node_modules/@types/vscode/index.d.ts`.
-
-## Run tests
-
-* Install the [Extension Test Runner](https://marketplace.visualstudio.com/items?itemName=ms-vscode.extension-test-runner)
-* Open the Testing view from the activity bar and click the Run Test" button, or use the hotkey `Ctrl/Cmd + ; A`
-* See the output of the test result in the Test Results view.
-* Make changes to `test/extension.test.js` or create new test files inside the `test` folder.
-  * The provided test runner will only consider files matching the name pattern `**.test.js`.
-  * You can create folders inside the `test` folder to structure your tests any way you want.
-
-## Go further
-
- * [Follow UX guidelines](https://code.visualstudio.com/api/ux-guidelines/overview) to create extensions that seamlessly integrate with VS Code's native interface and patterns.
- * [Publish your extension](https://code.visualstudio.com/api/working-with-extensions/publishing-extension) on the VS Code extension marketplace.
- * Automate builds by setting up [Continuous Integration](https://code.visualstudio.com/api/working-with-extensions/continuous-integration).
- * Integrate to the [report issue](https://code.visualstudio.com/api/get-started/wrapping-up#issue-reporting) flow to get issue and feature requests reported by users.
+**Note**: 
+ - Ensure Python is in your system PATH for Agent Mode functionality.  
+ - Local development debugging available via `F5` in VSCode.  
