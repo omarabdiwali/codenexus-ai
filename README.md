@@ -37,6 +37,7 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 git clone https://github.com/omarabdiwali/vscode-ai-chat.git
 npm install -g @vscode/vsce
 cd ai-chat
+npm install
 vsce package
 code --install-extension ai-chat-*.vsix
 ```
