@@ -16,8 +16,7 @@
       {
         "command": "ai-chat.openChatWithSelection",
         "key": "ctrl+k",
-        "mac": "cmd+k",
-        "when": "editorTextFocus"
+        "mac": "cmd+k"
       }
     ],
     "viewsContainers": {
