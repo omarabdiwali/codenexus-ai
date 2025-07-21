@@ -2,6 +2,10 @@
   "name": "ai-chat",
   "displayName": "ai-chat",
   "description": "An AI Chat using OpenRouter",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omarabdiwali/vscode-ai-chat.git"
+  },
   "version": "0.0.7",
   "engines": {
     "vscode": "^1.97.0"
