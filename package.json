@@ -6,7 +6,7 @@
     "type": "git",
     "url": "https://github.com/omarabdiwali/vscode-ai-chat.git"
   },
-  "version": "0.0.7",
+  "version": "0.0.8",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -57,6 +57,27 @@
       "type": "object",
       "title": "AI-Chat Extension Settings",
       "properties": {
+        "AI-Chat.OllamaModels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Unique model names that you have downloaded locally from Ollama (list Ollama Models and Ollama Names in the same order)."
+        },
+        "AI-Chat.OllamaNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Names of the models from Ollama (list Ollama Models and Ollama Names in the same order)."
+        },
+        "AI-Chat.UseOllama": {
+          "type": "boolean",
+          "description": "Use Ollama to run local LLMs.",
+          "default": false
+        },
         "AI-Chat.ModelNames": {
           "type": "array",
           "items": {

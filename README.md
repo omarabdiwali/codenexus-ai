@@ -2,6 +2,7 @@
 
 ![VSCode Extension](https://img.shields.io/badge/Visual_Studio_Code-0078D4?style=for-the-badge&logo=visual%20studio%20code&logoColor=white)
 ![OpenRouter Integration](https://img.shields.io/badge/OpenRouter-4B32C3?style=for-the-badge)
+![Ollama](https://img.shields.io/badge/Ollama-FF6C37?style=for-the-badge&logo=docker&logoColor=white)
 ![Python Required](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
 
 A powerful VSCode extension that brings multi-LLM intelligence to your coding workflow, with advanced context awareness and code execution capabilities.
@@ -11,6 +12,7 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 ## ✨ Features
 
 - **Multi-LLM Support**: Switch between 5 different language models with automatic fallback
+- **Ollama Usage**: Ability to switch and use Ollama LLMs exclusively, making everything local
 - **Code Context Awareness**:
   - `@filename` syntax with auto-complete
   - LRU cached file context (3-file memory)
@@ -31,6 +33,7 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 - Node.js 16+
 - Python 3.8+ (for Agent Mode)
 - [OpenRouter API Key](https://openrouter.ai/)
+- [Ollama](https://ollama.com) (optional, needed if you want access to local LLMs)
 
 ### Installation
 ```bash
@@ -71,8 +74,22 @@ code --install-extension ai-chat-*.vsix
   - `Model Names`: Names of the large language models using [OpenRouter](https://openrouter.ai/models).
   - `Models`: Unique IDs of the large language models from [OpenRouter](https://openrouter.ai/models) (list Models and Model Names in the same order).
   - `System Prompt`: Custom system prompt, which will be added in addition to the 'Agent' prompt when in Agent Mode.
+  - `Ollama Models`: Unique models that you have downloaded locally from Ollama (ex. `gemma3:1b`)
+  - `Ollama Names`: Names of the models from Ollama (ex. `Gemma 3 (1b)`).
+  - `Use Ollama`: Use Ollama to run local LLMs.
 
   These configuration options can be accessed from the settings button on the webview or through the user's settings page, under `AI-Chat`.
+
+## 🌐 Local LLM Support via Ollama
+
+Add local AI capabilities using Ollama's lightweight framework:
+
+**Setup**:
+1. Install [Ollama](https://ollama.com/download)
+2. Pull models from Ollama (`ollama pull gemma3:1b`)
+3. Add the model and the name to the configuration option.
+4. Check the '*Use Ollama*' configuration option.
+5. Select and use the LLM from the extension window.
 
 ## 📂 Project Structure
 | File             | Purpose                                  |
@@ -104,3 +121,4 @@ MIT License - See [LICENSE](LICENSE) for details
 **Note**: 
  - Ensure Python is in your system PATH for Agent Mode functionality.  
  - Local development debugging available via `F5` in VSCode.  
+ - Ensure that the Ollama model is pulled before its use in the extension.

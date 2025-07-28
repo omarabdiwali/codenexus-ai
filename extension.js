@@ -38,6 +38,7 @@ let fileTitles = {};
 let currentlyResponding = false;
 let continueResponse = true;
 let agentMode = false;
+let ollama = false;
 let queuedChanges = [];
 
 let runnablePrograms = {}
@@ -78,6 +79,8 @@ When running something through a command prompt, make sure to run it through a s
 let llms = [];
 let llmNames = [];
 let customSystemPrompt = "";
+let ollamaModels = [];
+let ollamaNames = [];
 
 const fileConfigChange = async (config, provider) => {
     const included = config.get("FilesIncluded", defaultInclude);
@@ -111,9 +114,17 @@ const getConfigData = async (event=null, provider=null) => {
     const modelNames = config.get("ModelNames", []).filter((val) => val.trim().length != 0);
     const length = Math.min(models.length, modelNames.length);
     
+    const olModels = config.get("OllamaModels", []).filter((val) => val.trim().length != 0);
+    const olNames = config.get("OllamaNames", []).filter((val) => val.trim().length != 0);
+    const olLength = Math.min(olModels.length, olNames.length);
+    
+    ollamaModels = olModels.slice(0, olLength);
+    ollamaNames = olNames.slice(0, olLength);
     llms = models.slice(0, length);
     llmNames = modelNames.slice(0, length);
-    llmIndex = Math.min(llmIndex, length - 1);
+
+    ollama = config.get("UseOllama", false);    
+    llmIndex = ollama ? Math.min(llmIndex, olLength - 1) : Math.min(llmIndex, length - 1);
     fileHistory.changeSize(config.get("ContextFileSize", 3));
     interactionHistory = config.get("ContextInteractionSize", 5);
     include = config.get("FilesIncluded", "");
@@ -198,14 +209,14 @@ const generateMessages = async (chat, mentionedCode) => {
     return messages;
 }
 
-const sendChat = async (panel, messages, openChat, chat, index, count, originalQuestion) => {
+const sendChat = async (panel, messages, openChat, chat, index, count, originalQuestion, models=llms, names=llmNames) => {
     const startTime = performance.now();
     let sendMessage = true;
     currentResponse = "";
 
     try {
         const stream = await openChat.chat.completions.create({
-            model: llms[index],
+            model: models[index],
             stream: true,
             messages
         });
@@ -225,7 +236,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
         let totalTime = `${(performance.now() - startTime) / 1000}`;
         totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
         
-        const runTime = `Call to ${llmNames[index]} took ${totalTime} seconds.`;
+        const runTime = `Call to ${names[index]} took ${totalTime} seconds.`;
         const totalResponse = `${currentResponse}\n\n**${runTime}**`;
         const key = crypto.randomUUID();
 
@@ -256,12 +267,12 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
         if (!continueResponse) {
             let totalTime = `${(performance.now() - startTime) / 1000}`;
             totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
-            const runTime = `Call to ${llmNames[index]} took ${totalTime} seconds.`;
+            const runTime = `Call to ${names[index]} took ${totalTime} seconds.`;
             writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : sendStream(panel, runtime);
             continueResponse = true;
             return;
         }
-        if (count === llms.length) {
+        if (count === models.length) {
             console.log("hit an error!");
             console.log(err.error);
 
@@ -276,8 +287,8 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             }
         } else {
             index += 1;
-            index %= llms.length;
-            await sendChat(panel, messages, openChat, chat, index, count + 1, originalQuestion);
+            index %= models.length;
+            await sendChat(panel, messages, openChat, chat, index, count + 1, originalQuestion, models, names);
         }
     }
 };
@@ -394,6 +405,10 @@ class AIChatViewProvider {
             baseURL: "https://openrouter.ai/api/v1",
             apiKey: this.apiKey
         });
+        this.ollamaChat = new openai.OpenAI({
+            baseURL: 'http://localhost:11434/v1',
+            apiKey: 'ollama'
+        })
     }
 
     async handleIncomingData(data) {
@@ -526,7 +541,8 @@ class AIChatViewProvider {
                 webviewView.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache) });
                 textFromFile = "";
                 webviewView.webview.postMessage({ command: 'disableAsk' });
-                await sendChat(webviewView, messages, this.openChat, text, llmIndex, 0, userQuestion);
+                if (ollama) await sendChat(webviewView, messages, this.ollamaChat, text, llmIndex, 0, userQuestion, ollamaModels, ollamaNames)
+                else await sendChat(webviewView, messages, this.openChat, text, llmIndex, 0, userQuestion);
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
 
                 updateQueuedChanges();
@@ -586,9 +602,10 @@ class AIChatViewProvider {
     }
 
     _getHtmlForWebview() {
+        let names = ollama ? ollamaNames : llmNames;
         let optionsHtml = '';
-        for (let i = 0; i < llmNames.length; i++) {
-            optionsHtml += `<option value="${i}" ${i === llmIndex ? 'selected' : ''}>${llmNames[i]}</option>`;
+        for (let i = 0; i < names.length; i++) {
+            optionsHtml += `<option value="${i}" ${i === llmIndex ? 'selected' : ''}>${names[i]}</option>`;
         }
 
         let chatHistoryHtml = '';
