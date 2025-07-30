@@ -19,13 +19,11 @@ const {
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
-const duplicatedFiles = new Set();
 const fileHistory = new LRUCache(3);
 const defaultInclude = "";
 const defaultExclude = "{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}";
 
 let questionsAndResponses = [];
-let previousResponse = "";
 let currentResponse = "";
 let textFromFile = "";
 let promptValue = "";
@@ -71,16 +69,16 @@ THAT YOUR CODE BLOCK IS ALSO ENCLOSED using ${backticks}, with an example progra
 SHOW ${token} ANYWHERE ELSE IN THE RESPONSE EXCEPT ENCLOSING YOUR GENERATED FUNCTION, NOT EVEN IN YOUR EXPLANATION. ALSO, for generated code, KEEP YOUR EXPLANATION TO A MINIMUM, AND 
 IF NEEDED, ONLY GIVE MAXIMUM 2 SENTENCES. VERIFY THAT YOU ARE FOLLOWING ALL OF THESE RULES WHEN STREAMING YOUR RESPONSE. MAKE SURE, TRIPLE CHECK THAT THE PROGRAM HAS THE 
 TOKEN BARRIER, AND FOLLOWS THE CORRECT BLUEPRINT AS THE EXAMPLE PROGRAM. ALSO, THE BASE PATH IS PROVIDED AS AN ENV VARIABLE AS WELL, WITH THE NAME 'BASE_WORKSPACE_PATH'. If asked to do multiple things, 
-break the program into smaller parts instead of one large program, and make sure that if they are run in order, that it will achieve what the user wants. For example, if the user asks for something like 
-"Create a React project, then make it a tic-tac-toe game", it will be broken up into two parts, the first program being creating the React project, and the second being fulfilling the tic-tac-toe requirement. 
+break the program into logical parts, that when run in a certain order, will achieve what the user wants. For example, if the user asks for something like "Create a React project, 
+then make it a tic-tac-toe game", it will be broken up into two parts, the first program being creating the React project, and the second being fulfilling the tic-tac-toe requirement. 
 When running something through a command prompt, make sure to run it through a shell. The user's operating system platform is: ${process.platform}
 `
 
-let llms = [];
-let llmNames = [];
-let customSystemPrompt = "";
+let openRouterModels = [];
+let openRouterNames = [];
 let ollamaModels = [];
 let ollamaNames = [];
+let customSystemPrompt = "";
 
 const fileConfigChange = async (config, provider) => {
     const included = config.get("FilesIncluded", defaultInclude);
@@ -93,14 +91,14 @@ const configChangeDebounce = debounce(fileConfigChange, 1500);
 
 const updateConfig = async (event, provider) => {
     const config = vscode.workspace.getConfiguration("AI-Chat");
-    if (isChanged("Models", event)) {
-        const models = config.get("Models", []);
+    if (isChanged("OpenRouterModels", event)) {
+        const models = config.get("OpenRouterModels", []);
         const validModels = models.filter((val) => val.trim().length != 0);
-        if (models.length != validModels.length) await config.update("Models", validModels);
-    } else if (isChanged("ModelNames", event)) {
-        const modelNames = config.get("ModelNames", []);
+        if (models.length != validModels.length) await config.update("OpenRouterModels", validModels);
+    } else if (isChanged("OpenRouterModelNames", event)) {
+        const modelNames = config.get("OpenRouterModelNames", []);
         const validNames = modelNames.filter((val) => val.trim().length != 0);
-        if (modelNames.length != validNames.length) await config.update("ModelNames", validNames);
+        if (modelNames.length != validNames.length) await config.update("OpenRouterModelNames", validNames);
     } else if (isChanged("FilesIncluded", event) || isChanged("FilesExcluded", event)) {
         configChangeDebounce(config, provider);
     }
@@ -110,21 +108,22 @@ const getConfigData = async (event=null, provider=null) => {
     event && await updateConfig(event, provider);
     const config = vscode.workspace.getConfiguration("AI-Chat");
     
-    const models = config.get("Models", []).filter((val) => val.trim().length != 0);
-    const modelNames = config.get("ModelNames", []).filter((val) => val.trim().length != 0);
-    const length = Math.min(models.length, modelNames.length);
+    const orModels = config.get("OpenRouterModels", []).filter((val) => val.trim().length != 0);
+    const orModelNames = config.get("OpenRouterModelNames", []).filter((val) => val.trim().length != 0);
+    const orLength = Math.min(orModels.length, orModelNames.length);
     
     const olModels = config.get("OllamaModels", []).filter((val) => val.trim().length != 0);
-    const olNames = config.get("OllamaNames", []).filter((val) => val.trim().length != 0);
+    const olNames = config.get("OllamaModelNames", []).filter((val) => val.trim().length != 0);
     const olLength = Math.min(olModels.length, olNames.length);
     
     ollamaModels = olModels.slice(0, olLength);
     ollamaNames = olNames.slice(0, olLength);
-    llms = models.slice(0, length);
-    llmNames = modelNames.slice(0, length);
+    openRouterModels = orModels.slice(0, orLength);
+    openRouterNames = orModelNames.slice(0, orLength);
 
     ollama = config.get("UseOllama", false);    
-    llmIndex = ollama ? Math.min(llmIndex, olLength - 1) : Math.min(llmIndex, length - 1);
+    llmIndex = ollama ? Math.min(llmIndex, olLength - 1) : Math.min(llmIndex, orLength - 1);
+    llmIndex = Math.max(0, llmIndex);
     fileHistory.changeSize(config.get("ContextFileSize", 3));
     interactionHistory = config.get("ContextInteractionSize", 5);
     include = config.get("FilesIncluded", "");
@@ -209,7 +208,7 @@ const generateMessages = async (chat, mentionedCode) => {
     return messages;
 }
 
-const sendChat = async (panel, messages, openChat, chat, index, count, originalQuestion, models=llms, names=llmNames) => {
+const sendChat = async (panel, messages, openChat, chat, index, count, originalQuestion, models, names) => {
     const startTime = performance.now();
     let sendMessage = true;
     currentResponse = "";
@@ -342,7 +341,7 @@ async function activate(context) {
         }
     });
     
-    const focusChatCommand = vscode.commands.registerCommand('ai-chat.chat.focus', async (data) => {
+    vscode.commands.registerCommand('ai-chat.chat.focus', async (data) => {
         if (provider) {
             provider.show();
             await provider.handleIncomingData(data);
@@ -509,8 +508,16 @@ class AIChatViewProvider {
 
         webviewView.webview.onDidReceiveMessage(async (message) => {
             if (message.command === "chat") {
+                const numOfModels = ollama ? ollamaModels.length : openRouterModels.length;
                 if (currentlyResponding) return;
+                if (llmIndex >= numOfModels || llmIndex < 0) {
+                    const provider = ollama ? 'Ollama' : 'OpenRouter';
+                    vscode.window.showErrorMessage(`No available models for ${provider}. Add LLMs using the 'Settings' icon on the webview.`);
+                    return;
+                }
                 
+                webviewView.webview.postMessage({ command: 'disableAsk' });
+                currentlyResponding = true;
                 promptValue = "";
                 currentMentionedFiles = {};
 
@@ -535,14 +542,12 @@ class AIChatViewProvider {
 
                 this.loading();                
                 webviewView.webview.postMessage({ command: 'content', text: '' });
-                currentlyResponding = true;
 
                 const messages = await generateMessages(text, textFromFile);
                 webviewView.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache) });
                 textFromFile = "";
-                webviewView.webview.postMessage({ command: 'disableAsk' });
                 if (ollama) await sendChat(webviewView, messages, this.ollamaChat, text, llmIndex, 0, userQuestion, ollamaModels, ollamaNames)
-                else await sendChat(webviewView, messages, this.openChat, text, llmIndex, 0, userQuestion);
+                else await sendChat(webviewView, messages, this.openChat, text, llmIndex, 0, userQuestion, openRouterModels, openRouterNames);
                 webviewView.webview.postMessage({ command: 'cancelView', value: false });
 
                 updateQueuedChanges();
@@ -602,7 +607,7 @@ class AIChatViewProvider {
     }
 
     _getHtmlForWebview() {
-        let names = ollama ? ollamaNames : llmNames;
+        let names = ollama ? ollamaNames : openRouterNames;
         let optionsHtml = '';
         for (let i = 0; i < names.length; i++) {
             optionsHtml += `<option value="${i}" ${i === llmIndex ? 'selected' : ''}>${names[i]}</option>`;
@@ -622,6 +627,7 @@ class AIChatViewProvider {
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "styles.css"));
         const nonce = getNonce();
         const disableOutput = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
+        const placeholder = `Type your message here, with @file.ext to mention files (max ${fileHistory.maxSize}), and using tab to select the correct one...`
 
         const llmModes = ["Chat"];
         !disableOutput && llmModes.push("Agent");
@@ -650,7 +656,7 @@ class AIChatViewProvider {
             <div id="chat-container">
                 <div id="input-area">
                     <div id="context-files"></div>
-                    <textarea id="prompt" rows="3" placeholder="Type your message here, with @file.ext to mention files (max ${fileHistory.maxSize}), and using tab to select the correct one..."></textarea>
+                    <textarea id="prompt" rows="3" placeholder="${placeholder}"></textarea>
                     <div tabindex='-1' id="file-options"></div>
                     <div class="options-container">
                         <div id="llmDropdown">

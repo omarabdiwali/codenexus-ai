@@ -63,36 +63,36 @@
             "type": "string"
           },
           "default": [],
-          "description": "Unique model names that you have downloaded locally from Ollama (list Ollama Models and Ollama Names in the same order)."
+          "description": "Unique IDs of the models that you have downloaded locally from Ollama (list Ollama Models and Names in the same order)."
         },
-        "AI-Chat.OllamaNames": {
+        "AI-Chat.OllamaModelNames": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "description": "Names of the models from Ollama (list Ollama Models and Ollama Names in the same order)."
+          "description": "Names of the models from Ollama (list Ollama Models and Names in the same order)."
         },
         "AI-Chat.UseOllama": {
           "type": "boolean",
           "description": "Use Ollama to run local LLMs.",
           "default": false
         },
-        "AI-Chat.ModelNames": {
+        "AI-Chat.OpenRouterModelNames": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "default": ["Gemma 3.0 (27b)", "Qwen3 (32b)", "Microsoft MAI"],
-          "description": "Names of the Large Language Models (list Models and Model Names in the same order)."
+          "default": [],
+          "description": "Names of the Large Language Models from OpenRouter (list OpenRouter Models and Names in the same order)."
         },
-        "AI-Chat.Models": {
+        "AI-Chat.OpenRouterModels": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "default": ["google/gemma-3-27b-it:free", "qwen/qwen3-32b:free", "microsoft/mai-ds-r1:free"],
-          "description": "Unique IDs of the Large Language Models from OpenRouter (list Models and Model Names in the same order)."
+          "default": [],
+          "description": "Unique IDs of the Large Language Models from OpenRouter (list OpenRouter Model and Names in the same order)."
         },
         "AI-Chat.ContextFileSize": {
           "type": "number",
