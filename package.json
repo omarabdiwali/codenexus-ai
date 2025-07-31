@@ -1,12 +1,12 @@
 {
-  "name": "ai-chat",
-  "displayName": "ai-chat",
-  "description": "An AI Chat using OpenRouter",
+  "name": "codenexus-ai",
+  "displayName": "CodeNexus AI",
+  "description": "CodeNexus AI - An AI extension to VSCode, combining OpenRouter and Ollama.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/omarabdiwali/vscode-ai-chat.git"
+    "url": "https://github.com/omarabdiwali/codenexus-ai.git"
   },
-  "version": "0.0.8",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -18,7 +18,7 @@
   "contributes": {
     "keybindings": [
       {
-        "command": "ai-chat.openChatWithSelection",
+        "command": "codenexus-ai.openChatWithSelection",
         "key": "ctrl+k",
         "mac": "cmd+k"
       }
@@ -27,37 +27,37 @@
       "activitybar": [
         {
           "icon": "./resources/icon.svg",
-          "id": "ai-chat-view",
-          "title": "AI Chat"
+          "id": "codenexus-ai-view",
+          "title": "CodeNexus AI"
         }
       ]
     },
     "views": {
-      "ai-chat-view": [
+      "codenexus-ai-view": [
         {
           "type": "webview",
-          "id": "ai-chat.chat",
-          "name": "AI Chat",
+          "id": "codenexus-ai.chat",
+          "name": "CodeNexus AI",
           "icon": "./resources/icon.svg",
-          "contextualTitle": "AI Chat"
+          "contextualTitle": "CodeNexus AI"
         }
       ]
     },
     "commands": [
       {
-        "command": "ai-chat.changeApiKey",
-        "title": "AI Chat: Change API Key"
+        "command": "codenexus-ai.changeApiKey",
+        "title": "CodeNexus AI: Change API Key"
       },
       {
-        "command": "ai-chat.openChatWithSelection",
-        "title": "AI Chat: Open with Selection"
+        "command": "codenexus-ai.openChatWithSelection",
+        "title": "CodeNexus AI: Open with Selection"
       }
     ],
     "configuration": {
       "type": "object",
-      "title": "AI-Chat Extension Settings",
+      "title": "Codenexus AI Extension Settings",
       "properties": {
-        "AI-Chat.OllamaModels": {
+        "CodenexusAI.OllamaModels": {
           "type": "array",
           "items": {
             "type": "string"
@@ -65,7 +65,7 @@
           "default": [],
           "description": "Unique IDs of the models that you have downloaded locally from Ollama (list Ollama Models and Names in the same order)."
         },
-        "AI-Chat.OllamaModelNames": {
+        "CodenexusAI.OllamaModelNames": {
           "type": "array",
           "items": {
             "type": "string"
@@ -73,12 +73,12 @@
           "default": [],
           "description": "Names of the models from Ollama (list Ollama Models and Names in the same order)."
         },
-        "AI-Chat.UseOllama": {
+        "CodenexusAI.UseOllama": {
           "type": "boolean",
           "description": "Use Ollama to run local LLMs.",
           "default": false
         },
-        "AI-Chat.OpenRouterModelNames": {
+        "CodenexusAI.OpenRouterModelNames": {
           "type": "array",
           "items": {
             "type": "string"
@@ -86,7 +86,7 @@
           "default": [],
           "description": "Names of the Large Language Models from OpenRouter (list OpenRouter Models and Names in the same order)."
         },
-        "AI-Chat.OpenRouterModels": {
+        "CodenexusAI.OpenRouterModels": {
           "type": "array",
           "items": {
             "type": "string"
@@ -94,31 +94,31 @@
           "default": [],
           "description": "Unique IDs of the Large Language Models from OpenRouter (list OpenRouter Model and Names in the same order)."
         },
-        "AI-Chat.ContextFileSize": {
+        "CodenexusAI.ContextFileSize": {
           "type": "number",
           "default": 3,
           "minimum": 1,
           "maximum": 20,
           "description": "Maximum number of files that can be kept for context."
         },
-        "AI-Chat.ContextInteractionSize": {
+        "CodenexusAI.ContextInteractionSize": {
           "type": "number",
           "default": 5,
           "minimum": 1,
           "maximum": 20,
           "description": "The length of interaction history used for context."
         },
-        "AI-Chat.FilesExcluded": {
+        "CodenexusAI.FilesExcluded": {
           "type": "string",
           "default": "{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}",
           "description": "Files you want excluded from being accessed by the extension in the working directory using glob patterns: (https://code.visualstudio.com/docs/editor/glob-patterns)."
         },
-        "AI-Chat.FilesIncluded": {
+        "CodenexusAI.FilesIncluded": {
           "type": "string",
           "default": "",
           "description": "Files you want the extension to access using glob patterns in the working directory: (https://code.visualstudio.com/docs/editor/glob-patterns) (empty access everything)."
         },
-        "AI-Chat.SystemPrompt": {
+        "CodenexusAI.SystemPrompt": {
           "type": "string",
           "default": "",
           "description": "Custom system prompt, which will be added in addition to the 'Agent' prompt when in Agent Mode."

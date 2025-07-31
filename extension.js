@@ -90,7 +90,7 @@ const fileConfigChange = async (config, provider) => {
 const configChangeDebounce = debounce(fileConfigChange, 1500);
 
 const updateConfig = async (event, provider) => {
-    const config = vscode.workspace.getConfiguration("AI-Chat");
+    const config = vscode.workspace.getConfiguration("CodenexusAI");
     if (isChanged("OpenRouterModels", event)) {
         const models = config.get("OpenRouterModels", []);
         const validModels = models.filter((val) => val.trim().length != 0);
@@ -106,7 +106,7 @@ const updateConfig = async (event, provider) => {
 
 const getConfigData = async (event=null, provider=null) => {
     event && await updateConfig(event, provider);
-    const config = vscode.workspace.getConfiguration("AI-Chat");
+    const config = vscode.workspace.getConfiguration("CodenexusAI");
     
     const orModels = config.get("OpenRouterModels", []).filter((val) => val.trim().length != 0);
     const orModelNames = config.get("OpenRouterModelNames", []).filter((val) => val.trim().length != 0);
@@ -132,7 +132,7 @@ const getConfigData = async (event=null, provider=null) => {
 }
 
 const isChanged = (value, event) => {
-    return event.affectsConfiguration(`AI-Chat.${value}`)
+    return event.affectsConfiguration(`CodenexusAI.${value}`)
 }
 
 const updateQueuedChanges = () => {
@@ -296,7 +296,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
  * @param {vscode.ExtensionContext} context
  */
 async function activate(context) {
-    let apiKey = await context.secrets.get('aiChatApiKey');
+    let apiKey = await context.secrets.get('codeNexusApiKey');
     if (!apiKey) {
         apiKey = await vscode.window.showInputBox({
             prompt: 'Enter your OpenRouter API key',
@@ -305,15 +305,15 @@ async function activate(context) {
         });
 
         if (!apiKey) {
-            vscode.window.showErrorMessage('AI Chat requires an OpenRouter API key to function.');
+            vscode.window.showErrorMessage('CodeNexus requires an OpenRouter API key to function.');
             return;
         }
 
-        await context.secrets.store('aiChatApiKey', apiKey);
+        await context.secrets.store('codeNexusApiKey', apiKey);
     }
 
     await getConfigData();
-    const provider = new AIChatViewProvider(context.extensionUri, context, apiKey);
+    const provider = new CodeNexusViewProvider(context.extensionUri, context, apiKey);
 
     const updateOpenAIClient = (key) => {
         if (provider) {
@@ -325,7 +325,7 @@ async function activate(context) {
         }
     };
 
-    const changeApiKeyCommand = vscode.commands.registerCommand('ai-chat.changeApiKey', async () => {
+    const changeApiKeyCommand = vscode.commands.registerCommand('codenexus-ai.changeApiKey', async () => {
         const newApiKey = await vscode.window.showInputBox({
             prompt: 'Enter your new OpenRouter API key',
             ignoreFocusOut: true,
@@ -333,7 +333,7 @@ async function activate(context) {
         });
 
         if (newApiKey) {
-            await context.secrets.store('aiChatApiKey', newApiKey);
+            await context.secrets.store('codeNexusApiKey', newApiKey);
             updateOpenAIClient(newApiKey);
             vscode.window.showInformationMessage('OpenRouter API key updated successfully.');
         } else {
@@ -341,7 +341,7 @@ async function activate(context) {
         }
     });
     
-    vscode.commands.registerCommand('ai-chat.chat.focus', async (data) => {
+    vscode.commands.registerCommand('codenexus-ai.chat.focus', async (data) => {
         if (provider) {
             provider.show();
             await provider.handleIncomingData(data);
@@ -350,21 +350,21 @@ async function activate(context) {
         }
     })
 
-    const openChatShortcut = vscode.commands.registerCommand('ai-chat.openChatWithSelection', async () => {
+    const openChatShortcut = vscode.commands.registerCommand('codenexus-ai.openChatWithSelection', async () => {
         const editor = vscode.window.activeTextEditor;
         const text = editor ? editor.document.getText(editor.selection) : "";
-        await vscode.commands.executeCommand('ai-chat.chat.focus', text);
+        await vscode.commands.executeCommand('codenexus-ai.chat.focus', text);
     });
 
     vscode.workspace.onDidChangeConfiguration(async (event) => {        
-        if (event.affectsConfiguration("AI-Chat")) {
+        if (event.affectsConfiguration("CodenexusAI")) {
             await getConfigData(event, provider);
             provider.updateHTML();
         }
     })
 
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(AIChatViewProvider.viewType, provider),
+        vscode.window.registerWebviewViewProvider(CodeNexusViewProvider.viewType, provider),
         changeApiKeyCommand,
         openChatShortcut
     );
@@ -387,8 +387,8 @@ async function activate(context) {
     });
 }
 
-class AIChatViewProvider {
-    static viewType = 'ai-chat.chat';
+class CodeNexusViewProvider {
+    static viewType = 'codenexus-ai.chat';
     _view;
 
     /**
@@ -588,12 +588,12 @@ class AIChatViewProvider {
                 questionsAndResponses.splice(index, 1);
                 this.interactions = questionsAndResponses.length - 1;
             } else if (message.command === 'openSettings') {
-                await vscode.commands.executeCommand("workbench.action.openSettings", "AI-Chat")
+                await vscode.commands.executeCommand("workbench.action.openSettings", "CodenexusAI")
             } else if (message.command === 'refreshFiles') {
                 fileTitles = await getAllFiles(include, exclude, defaultInclude, defaultExclude);
                 webviewView.webview.postMessage({ command: 'fileTitles', value: fileTitles });
             } else if (message.command === 'updateApiKey') {
-                await vscode.commands.executeCommand('ai-chat.changeApiKey');
+                await vscode.commands.executeCommand('codenexus-ai.changeApiKey');
             }
         });
     }
@@ -650,7 +650,7 @@ class AIChatViewProvider {
             <link rel="stylesheet" href="${cssFile}">
             <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.5/dist/purify.min.js"></script>
-            <title>AI Chat</title>
+            <title>CodeNexus</title>
           </head>
           <body>
             <div id="chat-container">

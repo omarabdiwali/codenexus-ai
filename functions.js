@@ -255,7 +255,7 @@ class LRUCache {
             if (fileText === null) {
                 this.delete(location);
             } else {
-                textFromFiles += `${fileName} (${location.substring(1)}):\n${fileText}`
+                textFromFiles += `${fileName} (${location.substring(1)}):\n${fileText}\n\n`
             }
         }
 

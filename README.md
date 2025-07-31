@@ -1,4 +1,4 @@
-# 🤖 AI Chat - Intelligent Code Assistant for VSCode
+# 🤖 CodeNexus AI - Intelligent Code Assistant for VSCode
 
 ![VSCode Extension](https://img.shields.io/badge/Visual_Studio_Code-0078D4?style=for-the-badge&logo=visual%20studio%20code&logoColor=white)
 ![OpenRouter Integration](https://img.shields.io/badge/OpenRouter-4B32C3?style=for-the-badge)
@@ -37,12 +37,12 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 
 ### Installation
 ```bash
-git clone https://github.com/omarabdiwali/vscode-ai-chat.git
+git clone https://github.com/omarabdiwali/codenexus-ai.git
 npm install -g @vscode/vsce
-cd vscode-ai-chat
+cd codenexus-ai
 npm install
 vsce package
-code --install-extension ai-chat-*.vsix
+code --install-extension codenexus-ai-*.vsix
 ```
 
 ## 🛠️ Usage
@@ -64,7 +64,7 @@ code --install-extension ai-chat-*.vsix
 
 ## ⚙️ Configuration
 1. First launch automatically prompts for API key
-2. Update key from the extension webview or via command: `AI Chat: Change API Key`
+2. Update key from the extension webview or via command: `CodeNexus AI: Change API Key`
 
 **Additional Optional Configuration**:
   - `Context File Size`: Maximum number of files that can be kept for context (LRU size).
@@ -78,7 +78,7 @@ code --install-extension ai-chat-*.vsix
   - `Ollama Names`: Names of the models from Ollama (ex. `Gemma 3 (1b)`).
   - `Use Ollama`: Use Ollama to run local LLMs.
 
-  These configuration options can be accessed from the settings button on the webview or through the user's settings page, under `AI-Chat`.
+  These configuration options can be accessed from the settings button on the webview or through the user's settings page, under `Codenexus AI`.
 
 ## 🌐 Local LLM Support via Ollama
 
