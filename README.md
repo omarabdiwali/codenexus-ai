@@ -7,7 +7,7 @@
 
 A powerful VSCode extension that brings multi-LLM intelligence to your coding workflow, with advanced context awareness and code execution capabilities.
 
-![Extension Demo](https://i.imgur.com/kxoblg6.png)
+![Extension Demo](https://i.imgur.com/vYn0b3n.png)
 
 ## ✨ Features
 
@@ -53,7 +53,7 @@ code --install-extension codenexus-ai-*.vsix
 3. Highlight code + Ctrl/K for instant context
 
 ### Agent Mode
-![Agent Mode Demo](https://i.imgur.com/tUTP5F8.png)
+![Agent Mode Demo](https://i.imgur.com/GwSZ77V.png)
 1. Start query with "Please create..." or "Write a program to..."
 2. Review generated Python code
 3. Click "Run" for safe execution
@@ -70,7 +70,7 @@ code --install-extension codenexus-ai-*.vsix
   - `Context File Size`: Maximum number of files that can be kept for context (LRU size).
   - `Context Interaction Size`: The length of interaction history used for context.
   - `Files Excluded`: Files you want excluded from being accessed by the extension in the working directory using [glob patterns](https://code.visualstudio.com/docs/editor/glob-patterns).
-  - `Files Included`: Files you want the extension to access using [glob patterns](https://code.visualstudio.com/docs/editor/glob-patterns) in the working directory (empty access everything).
+  - `Files Included`: Files you want the extension to access using [glob patterns](https://code.visualstudio.com/docs/editor/glob-patterns) in the working directory (empty accesses everything).
   - `Model Names`: Names of the large language models using [OpenRouter](https://openrouter.ai/models).
   - `Models`: Unique IDs of the large language models from [OpenRouter](https://openrouter.ai/models) (list Models and Model Names in the same order).
   - `System Prompt`: Custom system prompt, which will be added in addition to the 'Agent' prompt when in Agent Mode.
