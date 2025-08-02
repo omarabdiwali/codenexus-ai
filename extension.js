@@ -671,12 +671,15 @@ class CodeNexusViewProvider {
                     </div>
 
                     <div class="options-container">
-                        <div class="${disableOutput ? "checkbox-button-container-hidden" : "checkbox-button-container"}">
+                        <div class="checkbox-button-container">
                             <input type="checkbox" id="writeToFileCheckbox" class="checkbox-button-input" ${writeToFile ? 'checked' : ''}>
-                            <label for="writeToFileCheckbox" class="checkbox-button-label">Write to File</label>
+                            <label for="writeToFileCheckbox" class="checkbox-button-label">
+                                <i class="fa-solid fa-xmark fa-xl icon-x"></i>
+                                <span class="label-text">Write to File</span>
+                            </label>
                             <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
                         </div>
-                        <button id="clear-history">Clear History</button>
+                        <button title="Clear History" class="options" id="clear-history"><i class="fas fa-solid fa-trash-can icon"></i></button>
                         <button title="Refresh files" class="options" id="refresh-files"><i class="fas fa-solid fa-sync-alt icon"></i></button>
                         <button title="Update API Key" class="options" id="api-key"><i class="fas fa-key icon"></i></button>
                         <button title="Settings" class="options" id="open-settings"><i class="fas fa-cog icon"></i></button>

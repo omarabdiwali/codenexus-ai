@@ -115,10 +115,9 @@ pre code.hljs {
     background-color: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border);
-    padding: 3px;
-    padding-left: 5px;
+    padding: 5px 5px;
     font-family: var(--vscode-font-family);
-    margin-left: 5px;
+    margin-top: 2px;
     border-radius: var(--border-radius-size);
 }
 #outputFileNameInput:disabled {
@@ -148,8 +147,16 @@ pre code.hljs {
     user-select: none;
 }
 .checkbox-button-input:checked + .checkbox-button-label {
-    background-color: var(--vscode-button-hoverBackground);
-    color: var(--vscode-button-foreground);
+    background-color: transparent;
+    border: none;
+    color: rgb(77, 124, 138);
+    cursor: pointer;
+    padding-left: 3px;
+    align-self: center;
+    margin: 0;
+}
+.checkbox-button-input:checked + .checkbox-button-label:hover {
+    color: rgb(115, 178, 198);
 }
 .checkbox-button-label:not(:checked) {
     background-color: transparent;
@@ -202,16 +209,6 @@ pre code.hljs {
     display: flex;
     gap: 5px;
     align-items: center;
-}
-#clear-history {
-    background-color: transparent;
-    color: gray;
-    border: none;
-    cursor: pointer;
-    margin-bottom: 10px;
-}
-#clear-history:hover {
-    color: lightgray
 }
 .button-styling {
     width: 100%;
@@ -309,10 +306,22 @@ pre code.hljs {
 .options:hover {
     color: rgb(115, 178, 198);
 }
-#refresh-files {
+#clear-history {
     margin-left: auto;
 }
 #refresh-files:disabled {
     cursor: default;
     opacity: 30%;
+}
+.checkbox-button-input:checked + .checkbox-button-label .icon-x {
+    display: inline-block;
+}
+.checkbox-button-input:checked + .checkbox-button-label .label-text {
+    display: none;
+}
+.checkbox-button-input:not(:checked) + .checkbox-button-label .icon-x {
+    display: none;
+}
+.checkbox-button-input:not(:checked) + .checkbox-button-label .label-text {
+    display: inline-block;
 }
