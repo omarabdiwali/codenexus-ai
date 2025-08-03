@@ -462,6 +462,7 @@ class CodeNexusViewProvider {
     updateHTML() {
         if (!this._view || !this._view.webview) return;
         this._view.webview.html = this._getHtmlForWebview();
+        this.inProgress();
         this.updateWorkspacePath();
         this.updatePageValues();
         this.updateFileList(false);

@@ -102,14 +102,6 @@ const getNonce = () => {
     return text;
 };
 
-/** Adds file content to a prompt. */
-const addFileToPrompt = async (file, location, duplicatedFiles) => {
-    if (duplicatedFiles.has(location)) return "";
-    duplicatedFiles.add(location);
-    const text = await getTextFromFile(location);
-    return file + ":\n" + text;
-};
-
 /** Checks the generated code for dangerous patterns, and alerts the user. */
 const checkCodeForDangerousPatterns = (code) => {
     const dangerousPatterns = [
