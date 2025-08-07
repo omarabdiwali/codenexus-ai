@@ -13,7 +13,7 @@ const llmMode = document.getElementById('mode-select')
 const settings = document.getElementById('open-settings');
 const refreshFiles = document.getElementById('refresh-files');
 const updateKey = document.getElementById('api-key');
-const regEx = new RegExp(/[\b\@][\w\.]*\.[a-zA-Z]+\b/g);
+const regEx = new RegExp(/\B@(?:[A-Za-z0-9_-](?:[A-Za-z0-9-_ ]*[A-Za-z0-9_-])?)(?:\.[A-Za-z0-9_-]+)*/g);
 
 let maxFiles = 3;
 let prevPrompt = "";
@@ -97,9 +97,7 @@ const addContextedFiles = () => {
 }
 
 const formatUserQuestion = (text) => {
-    text = DOMPurify.sanitize(text);
     text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>');
-
     return text.replace(regEx, (match) => {
         const title = match.substring(1);
         if (!(title in fileTitlesWithLocations)) return match;

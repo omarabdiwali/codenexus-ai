@@ -1,7 +1,19 @@
 const vscode = require('vscode');
 const openai = require('openai');
-const showdown = require('showdown');
 const { performance } = require("perf_hooks");
+
+const { unified } = require('unified');
+const remarkParseMod = require('remark-parse');
+const remarkGfmMod = require('remark-gfm');
+const remarkRehypeMod = require('remark-rehype');
+const rehypeStringifyMod = require('rehype-stringify');
+const rehypeSanitizeMod = require('rehype-sanitize');
+
+const remarkParse = remarkParseMod.default || remarkParseMod;
+const remarkGfm = remarkGfmMod.default || remarkGfmMod;
+const remarkRehype = remarkRehypeMod.default || remarkRehypeMod;
+const rehypeStringify = rehypeStringifyMod.default || rehypeStringifyMod;
+const rehypeSanitize = rehypeSanitizeMod.default || rehypeSanitizeMod;
 
 const {
     getFilePath,
@@ -45,9 +57,12 @@ let interactionHistory = 5;
 let include = defaultInclude;
 let exclude = defaultExclude;
 
-const converter = new showdown.Converter();
-converter.setOption("tables", true);
-converter.setOption("smoothLivePreview", true);
+const mdProcessor = unified()
+  .use(remarkParse)
+  .use(remarkGfm)
+  .use(remarkRehype)
+  .use(rehypeSanitize)
+  .use(rehypeStringify);
 
 const token = '!@!@!@!'
 const backticks = '```';
@@ -79,6 +94,11 @@ let openRouterNames = [];
 let ollamaModels = [];
 let ollamaNames = [];
 let customSystemPrompt = "";
+
+const mdToHtml = async (md) => {
+    const file = await mdProcessor.process(md || '');
+    return String(file);
+}
 
 const fileConfigChange = async (config, provider) => {
     const included = config.get("FilesIncluded", defaultInclude);
@@ -162,11 +182,12 @@ const generateProgram = (panel, stream, final) => {
     }
 }
 
-const sendStream = (panel, stream, final=false, key=null) => {
+const sendStream = async (panel, stream, final=false, key=null) => {
     if (!panel || !panel.webview) return;
     const showData = stream.replaceAll(token, "");
     agentMode && generateProgram(panel, stream, final);
-    panel.webview.postMessage({ command: "response", text: converter.makeHtml(showData), value: final, key });
+    const html = await mdToHtml(showData);
+    panel.webview.postMessage({ command: "response", text: html, value: final, key });
 };
 
 const addMessage = (messages, role, content) => {
@@ -226,7 +247,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             if (!continueResponse) break;
             const val = chunk.choices[0]?.delta?.content || "";
             currentResponse += val;
-            if (val.length > 0) writeToFile ? sendToFile(val, outputFileName) : sendStream(panel, currentResponse);
+            if (val.length > 0) writeToFile ? sendToFile(val, outputFileName) : await sendStream(panel, currentResponse);
         }
 
         if (currentResponse.length === 0 && continueResponse) throw new Error("Error: LLM has given no response!");
@@ -245,11 +266,12 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             sendToFile(`\n\n**${runTime}**\n\n`, outputFileName);
 
             if (panel && panel.webview) {
-                panel.webview.postMessage({ command: "response", text: converter.makeHtml(webviewResponse), value: true, key });
+                const html = await mdToHtml(webviewResponse);
+                panel.webview.postMessage({ command: "response", text: html, value: true, key });
             }
 
         } else {
-            sendStream(panel, totalResponse, true, key);
+            await sendStream(panel, totalResponse, true, key);
         }
 
         questionHistory.push(chat);
@@ -267,7 +289,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             let totalTime = `${(performance.now() - startTime) / 1000}`;
             totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
             const runTime = `Call to ${names[index]} took ${totalTime} seconds.`;
-            writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : sendStream(panel, runtime);
+            writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : await sendStream(panel, runtime);
             continueResponse = true;
             return;
         }
@@ -359,7 +381,7 @@ async function activate(context) {
     vscode.workspace.onDidChangeConfiguration(async (event) => {        
         if (event.affectsConfiguration("CodenexusAI")) {
             await getConfigData(event, provider);
-            provider.updateHTML();
+            await provider.updateHTML();
         }
     })
 
@@ -416,7 +438,7 @@ class CodeNexusViewProvider {
         
         if (trimmed.length > 0) {
             textFromFile = data;
-            let htmlText = converter.makeHtml("```\n" + data + "\n```");
+            let htmlText = await mdToHtml("```\n" + data + "\n```");
             await new Promise(res => setTimeout(res, 500));
             this._view.webview.postMessage({ command: 'content', text: htmlText });
         }
@@ -459,9 +481,9 @@ class CodeNexusViewProvider {
         }
     }
 
-    updateHTML() {
+    async updateHTML() {
         if (!this._view || !this._view.webview) return;
-        this._view.webview.html = this._getHtmlForWebview();
+        this._view.webview.html = await this._getHtmlForWebview();
         this.inProgress();
         this.updateWorkspacePath();
         this.updatePageValues();
@@ -477,7 +499,7 @@ class CodeNexusViewProvider {
         }
     }
 
-    resolveWebviewView(webviewView, _token) {
+    async resolveWebviewView(webviewView, _token) {
         this._view = webviewView;
 
         webviewView.webview.options = {
@@ -487,14 +509,14 @@ class CodeNexusViewProvider {
             ]
         };
 
-        webviewView.webview.html = this._getHtmlForWebview();
+        webviewView.webview.html = await this._getHtmlForWebview();
         webviewView.webview.postMessage({ command: 'focus' });
         this.updateFileList();
 
-        webviewView.onDidChangeVisibility(() => {
+        webviewView.onDidChangeVisibility(async () => {
             if (webviewView.visible) {
                 if (this.interactions != questionsAndResponses.length) {
-                    webviewView.webview.html = this._getHtmlForWebview();
+                    webviewView.webview.html = await this._getHtmlForWebview();
                     this.interactions = questionsAndResponses.length;
                 }
                 this.inProgress();
@@ -607,7 +629,7 @@ class CodeNexusViewProvider {
         `;
     }
 
-    _getHtmlForWebview() {
+    async _getHtmlForWebview() {
         let names = ollama ? ollamaNames : openRouterNames;
         let optionsHtml = '';
         for (let i = 0; i < names.length; i++) {
@@ -616,10 +638,11 @@ class CodeNexusViewProvider {
 
         let chatHistoryHtml = '';
         for (let i = 0; i < questionsAndResponses.length; i++) {
-              chatHistoryHtml += `
+            const response = await mdToHtml(questionsAndResponses[i].response.replaceAll(token, ""));
+            chatHistoryHtml += `
                 <div class="chat-entry" id="${questionsAndResponses[i].key}">
                     <div class="question"><strong>You:</strong> ${highlightFilenameMentions(questionsAndResponses[i].question, fileTitles)}</div>
-                    <div class="response">${converter.makeHtml(questionsAndResponses[i].response.replaceAll(token, ""))}</div>
+                    <div class="response">${response}</div>
                 </div>
             `;
         }
@@ -650,7 +673,6 @@ class CodeNexusViewProvider {
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
             <link rel="stylesheet" href="${cssFile}">
             <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
-            <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.5/dist/purify.min.js"></script>
             <title>CodeNexus</title>
           </head>
           <body>
