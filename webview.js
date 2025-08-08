@@ -26,6 +26,7 @@ let queue = [];
 let lastMatching = 0;
 let alreadyMatched = {};
 
+/** Creates a div element showing context file count (current/total). */
 const createNumberOfFiles = (fileCount) => {
     const files = document.createElement('div');
     files.id = 'file-number'
@@ -36,12 +37,14 @@ const createNumberOfFiles = (fileCount) => {
     return files;
 }
 
+/** Updates displayed context file count in the UI. */
 const replaceContextFileCount = (size) => {
     const newCount = createNumberOfFiles(size);
     const oldCount = contextFiles.lastElementChild;
     contextFiles.replaceChild(newCount, oldCount);
 }
 
+/** Removes a deleted context file from storage and UI. */
 const removeDeletedContext = (location) => {
     const index = contextedFilesStorage.findIndex((val) => val[0] == location);
     contextedFilesStorage.splice(index, 1);
@@ -50,6 +53,7 @@ const removeDeletedContext = (location) => {
     replaceContextFileCount(contextedFilesStorage.length);
 }
 
+/** Creates UI element for a context file with remove button. */
 const createContextedFileElement = (fileName, location) => {
     if (!baseWorkspacePath) return false;
 
@@ -79,6 +83,7 @@ const createContextedFileElement = (fileName, location) => {
     return true;
 }
 
+/** Renders all context files in the UI with count display. */
 const addContextedFiles = () => {
     contextFiles.replaceChildren();
     let fileCount = 0;
@@ -96,6 +101,7 @@ const addContextedFiles = () => {
     }
 }
 
+/** Formats user questions by highlighting '@mentioned' files. */
 const formatUserQuestion = (text) => {
     text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>');
     return text.replace(regEx, (match) => {
@@ -105,6 +111,7 @@ const formatUserQuestion = (text) => {
     });
 };
 
+/** Creates a 'Run' button for executable code blocks. */
 const generateRunButton = (key) => {
     const runButton = document.createElement('button');
     runButton.innerText = 'Run';
@@ -118,6 +125,7 @@ const generateRunButton = (key) => {
     return runButton;
 }
 
+/** Creates a 'Copy' button for code blocks. */
 const generateCopyButton = (text) => {
     const copyButton = document.createElement('button');
     copyButton.innerText = 'Copy';
@@ -132,6 +140,7 @@ const generateCopyButton = (text) => {
     return copyButton;
 }
 
+/** Adds action buttons (run/copy) to code blocks in responses. */
 const generateButtons = (codeBlock, currentTime) => {
     const container = document.createElement('div');
     const buttonDiv = document.createElement('div');
@@ -164,6 +173,7 @@ const generateButtons = (codeBlock, currentTime) => {
     container.appendChild(buttonDiv);
 };
 
+/** Creates UI for cancelable code blocks for mentioned code. */
 const cancelButtons = (codeBlock) => {
     const container = document.createElement('div');    
     const header = document.createElement('div');
@@ -184,12 +194,14 @@ const cancelButtons = (codeBlock) => {
     container.appendChild(codeBlock);
 };
 
+/** Adds copy buttons to all existing code blocks. */
 const addCopyButtons = () => {
     document.querySelectorAll("#chat-history pre code").forEach(codeBlock => {
         generateButtons(codeBlock, null);
     });
 };
 
+/** Highlights new code blocks and adds interaction buttons. */
 const highlightNewCodeBlocks = (currentTime = Date.now()) => {
     const newCodeBlocks = document.querySelectorAll("#chat-history pre code:not(.hljs)");
     newCodeBlocks.forEach(codeBlock => {
@@ -199,6 +211,7 @@ const highlightNewCodeBlocks = (currentTime = Date.now()) => {
     });
 };
 
+/** Applies syntax highlighting to mentioned code blocks. */
 const highlightMentionedCodeBlock = () => {
     document.querySelectorAll("#content pre code").forEach(codeBlock => {
         hljs.highlightElement(codeBlock);
@@ -207,11 +220,13 @@ const highlightMentionedCodeBlock = () => {
     });
 };
 
+/** Initial syntax highlighting setup for all code blocks. */
 const highlightAllCodeBlocks = () => {
     hljs.highlightAll();
     addCopyButtons();
 };
 
+/** Generates a delete button for a chat entry. */
 const generateCloseButton = (chatEntry, key) => {
     const button = document.createElement('button');
     button.innerText = 'X';
@@ -224,6 +239,7 @@ const generateCloseButton = (chatEntry, key) => {
     chatEntry.appendChild(button);
 }
 
+/** Adds delete buttons to all existing chat entries. */
 const addCloseButtons = () => {
     document.querySelectorAll(".chat-entry").forEach((element) => {
         generateCloseButton(element, element.id);
@@ -248,6 +264,7 @@ outputFileNameInput.addEventListener("input", (e) => {
     e.target.value = filteredValue;
 })
 
+/** Toggles output filename input based on checkbox state. */
 const handleDisable = (e) => {
     e.preventDefault();
     outputFileNameInput.disabled = !writeToFileCheckbox.checked;
@@ -256,6 +273,7 @@ const handleDisable = (e) => {
 
 writeToFileCheckbox.addEventListener('change', handleDisable);
 
+/** Appends a new user question to chat history, and creates a div for the response. */
 const appendToChat = (question) => {
     const chatEntry = document.createElement('div');
     chatEntry.classList.add('chat-entry');
@@ -276,6 +294,7 @@ const appendToChat = (question) => {
     responseArea.scrollTop = responseArea.scrollHeight;
 }
 
+/** Finds start index of difference between two strings. */
 const findChangeStart = (oldStr, newStr) => {
   const minLen = Math.min(oldStr.length, newStr.length);
   for (let i = 0; i < minLen; i++) {
@@ -284,6 +303,7 @@ const findChangeStart = (oldStr, newStr) => {
   return minLen;
 }
 
+/** Adjusts file mention indexes after prompt changes, and removes them if necessary. */
 const shiftStartIndexes = (oldStr, newStr) => {
     const diffStart = findChangeStart(oldStr, newStr);
     const diffLength = newStr.length - oldStr.length;
@@ -301,6 +321,7 @@ const shiftStartIndexes = (oldStr, newStr) => {
     return newMentionedFiles;
 }
 
+/** Verifies '@mentioned' files exist in workspace before sending. */
 const verifyMentionedFiles = (value) => {
     let match;
     let verified = {};
@@ -320,6 +341,7 @@ const verifyMentionedFiles = (value) => {
     mentionedFiles = verified;
 }
 
+/** Finds boundaries of current word at cursor position. */
 const startAndEndIndexForCursorWord = (value, start) => {
     let startIndex = value.substring(0, start).lastIndexOf(' ');
     let endIndex = value.substring(start).indexOf(' ');
@@ -328,18 +350,50 @@ const startAndEndIndexForCursorWord = (value, start) => {
     return [startIndex, endIndex];
 }
 
+/** Gets word at current cursor position. */
 const findCurrentCursorWord = (value, start) => {
     lastCursorPosition = start;
     const [startIndex, endIndex] = startAndEndIndexForCursorWord(value, start);
     return value.substring(startIndex, endIndex);
 }
 
+/** Returns the correct current auto-complete filename candidate, the filename and the start index. */
+const getCorrectFilename = (string) => {
+    const initialMatch = string.match(regEx);
+    const [startIndex, endIndex] = startAndEndIndexForCursorWord(prompt.value, lastCursorPosition);
+    const relativeCursorPosition = lastCursorPosition - startIndex;
+    let word;
+    let wordStartIndex;
+
+    if (!initialMatch) return [];
+    if (initialMatch.length > 1) {
+        let match;
+        while ((match = regEx.exec(string)) !== null) {
+            const start = match.index;
+            const end = start + match[0].length;
+            if (start <= relativeCursorPosition && end >= relativeCursorPosition) {
+                word = match[0];
+                wordStartIndex = startIndex + start;
+                break;
+            }
+        }
+    } else {
+        word = initialMatch[0];
+        wordStartIndex = startIndex + string.indexOf(word);
+    }
+
+    return [word, wordStartIndex];
+}
+
+/** Replaces cursor word with selected filename from autocomplete. */
 const replaceCursorWord = (start, fileInfo) => {
     const value = prompt.value;
     const [word, location] = fileInfo;
-    const [startIndex, endIndex] = startAndEndIndexForCursorWord(value, start);
-    
-    const previousCursorWord = value.substring(startIndex, endIndex);
+    const [stringStart, stringEnd] = startAndEndIndexForCursorWord(value, start);
+    const [wordChange, startIndex] = getCorrectFilename(value.substring(stringStart, stringEnd));
+    if (!wordChange) return;
+
+    const endIndex = startIndex + wordChange.length;
     const addWord = value.substring(0, startIndex+1) + word;
     const cursorPosition = addWord.length;
     
@@ -352,6 +406,7 @@ const replaceCursorWord = (start, fileInfo) => {
     fileSearch.style.display = 'none';
 }
 
+/** Creates clickable file autocomplete suggestions. */
 const createSearchItem = (file, value) => {
     if (!baseWorkspacePath) return;
     const item = document.createElement('div');
@@ -379,9 +434,12 @@ const createSearchItem = (file, value) => {
     return item;
 }
 
-const showFileOptions = (word) => {
+/** Displays the filename suggestions dropdown. */
+const showFileOptions = (string) => {
     fileSearch.replaceChildren();
-    if (!word || word.at(0) != '@') {
+    const [word, start] = getCorrectFilename(string);
+
+    if (!word) {
         fileSearch.style.display = 'none';
         return;
     }
@@ -409,6 +467,7 @@ const showFileOptions = (word) => {
     fileSearch.style.display = 'flex';
 }
 
+/** Calculates the Levenshtein distance between two strings. */
 const levenDist = (a, b) => {
     const tmp = [];
     let i, j, alen = a.length, blen = b.length, score, alen1 = alen + 1, blen1 = blen + 1;
@@ -429,6 +488,7 @@ const levenDist = (a, b) => {
     return tmp[alen][blen];
 }
 
+/** Normalizes whitespace in a string. */
 const normalizeString = (str) => {
   return str
     .replace(/\s+/g, ' ')
@@ -436,6 +496,7 @@ const normalizeString = (str) => {
     .replace(/\r\n|\r/g, '\n');
 }
 
+/** Escapes special characters in a string. */
 const escapeString = (str) => {
   return str
     .replace(/\\/g, '\\\\')
@@ -445,6 +506,7 @@ const escapeString = (str) => {
     .replace(/\t/g, '\\t');
 }
 
+/** Compares code blocks with high similarity threshold. */
 const comapreCodeBlock = (codeBlock, value) => {
     const normCode = escapeString(normalizeString(codeBlock));
     const normValue = escapeString(normalizeString(value));

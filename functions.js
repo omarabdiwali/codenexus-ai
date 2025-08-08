@@ -132,6 +132,7 @@ const checkCodeForDangerousPatterns = (code) => {
     }
 }
 
+/** Escaping special characters in a regular expression. */
 const escapeRegExp = (str) => {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -157,6 +158,7 @@ const getAllRunnablePrograms = (text, token, final=false) => {
     return blocks;
 }
 
+/** Creates a VSCode terminal for the Agent. */
 const createVSCodeTerminal = (basePath) => {
     const terminal = vscode.window.createTerminal({
         name: 'Agent Terminal',
@@ -219,6 +221,7 @@ class LRUCache {
         this.capacity += 1;
     }
 
+    /** Handles changing the size of the cache. */
     changeSize(size) {
         if (this.size() <= size) {
             this.capacity = size - this.size();
@@ -240,6 +243,7 @@ class LRUCache {
         return this.cache.has(key);
     }
 
+    /** Composes all of the text from the files stored in the LRUCache. */
     async getTextFile() {
         let textFromFiles = "Files mentioned in order from newest to oldest:\n\n";
         
