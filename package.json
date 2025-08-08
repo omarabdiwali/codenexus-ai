@@ -140,7 +140,7 @@
     "eslint": "^9.16.0"
   },
   "dependencies": {
-    "openai": "^4.82.0",
+    "openai": "^4.104.0",
     "rehype-sanitize": "^6.0.0",
     "rehype-stringify": "^10.0.1",
     "remark-gfm": "^4.0.1",

@@ -62,7 +62,7 @@ const replaceFileMentions = (question, files) => {
 /** Highlights filename mentions in text. */
 const highlightFilenameMentions = (text, fileTitles) => {
     text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-    const regEx = new RegExp(/\B@(?:[A-Za-z0-9_-](?:[A-Za-z0-9-_ ]*[A-Za-z0-9_-])?)(?:\.[A-Za-z0-9_-]+)*/g);
+    const regEx = new RegExp(/\B@(?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_-]+)/g);
     return text.replace(regEx, (match) => {
         const title = match.substring(1);
         if (!(title in fileTitles)) return match;

@@ -13,7 +13,7 @@ const llmMode = document.getElementById('mode-select')
 const settings = document.getElementById('open-settings');
 const refreshFiles = document.getElementById('refresh-files');
 const updateKey = document.getElementById('api-key');
-const regEx = new RegExp(/\B@(?:[A-Za-z0-9_-](?:[A-Za-z0-9-_ ]*[A-Za-z0-9_-])?)(?:\.[A-Za-z0-9_-]+)*/g);
+const regEx = new RegExp(/\B@(?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_-]+)/g);
 
 let maxFiles = 3;
 let prevPrompt = "";
