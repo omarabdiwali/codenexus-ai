@@ -378,8 +378,13 @@ const getCorrectFilename = (string) => {
             }
         }
     } else {
-        word = initialMatch[0];
-        wordStartIndex = startIndex + string.indexOf(word);
+        const matchedWord = initialMatch[0];
+        const matchedStart = startIndex + string.indexOf(matchedWord);
+        const matchedEnd = matchedStart + matchedWord.length;
+        if (matchedStart <= lastCursorPosition && matchedEnd >= lastCursorPosition) {
+            word = matchedWord;
+            wordStartIndex = matchedStart;
+        }
     }
 
     return [word, wordStartIndex];
@@ -545,12 +550,10 @@ prompt.addEventListener("keydown", (event) => {
 
 prompt.addEventListener("input", (event) => {
     mentionedFiles = shiftStartIndexes(prevPrompt, prompt.value);
-    let cursorWord = findCurrentCursorWord(event.target.value, event.target.selectionStart);
-    showFileOptions(cursorWord);
     vscode.postMessage({ command: 'updatePrompt', value: prompt.value, files: mentionedFiles });
 });
 
-prompt.addEventListener("click", (event) => {
+prompt.addEventListener("selectionchange", (event) => {
     let cursorWord = findCurrentCursorWord(event.target.value, event.target.selectionStart);
     showFileOptions(cursorWord);
 })
