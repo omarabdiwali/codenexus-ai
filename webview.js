@@ -522,6 +522,18 @@ const comapreCodeBlock = (codeBlock, value) => {
     return similarity >= 0.95;
 }
 
+const generateLLMDropdownValues = (names, index) => {
+    llmSelect.innerHTML = "";
+    for (let i = 0; i < names.length; i++) {
+        const option = document.createElement("option");
+        option.text = names[i];
+        option.value = i;
+        llmSelect.appendChild(option);
+    }
+    
+    llmSelect.value = index;
+}
+
 clearHistory.addEventListener("click", () => {
     vscode.postMessage({ command: 'clearHistory' });
 })
@@ -631,5 +643,8 @@ window.addEventListener("message", (e) => {
         llmMode.value = `${agent}`;
         llmSelect.value = index;
         maxFiles = fileSize;
+    } else if (command == 'configUpdate') {
+        if (key == "models") generateLLMDropdownValues(value.names, value.index);
+        else if (key == "fileSize") maxFiles = value;
     }
 });

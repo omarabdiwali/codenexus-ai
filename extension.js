@@ -107,27 +107,81 @@ const fileConfigChange = async (config, provider) => {
     provider.updateFileList();
 }
 
-const configChangeDebounce = debounce(fileConfigChange, 1500);
+const configChangeDebounce = debounce(fileConfigChange, 3000);
+
+const handleModelAndNamesChanges = (change, type, newValue, provider, config) => {
+    const modelChange = type === "models";
+    let renderChange = true;
+    if (change.startsWith("OpenRouter")) {
+        const otherType = modelChange ? "OpenRouterModelNames" : "OpenRouterModels";
+        const otherValue = config.get(otherType, []);
+        const cutoff = Math.min(newValue.length, otherValue.length);
+        openRouterModels = modelChange ? newValue.slice(0, cutoff) : otherValue.slice(0, cutoff);
+        openRouterNames = modelChange ? otherValue.slice(0, cutoff) : newValue.slice(0, cutoff);
+        renderChange = !ollama;
+    } else if (change.startsWith("Ollama")) {
+        const otherType = modelChange ? "OllamaModelNames" : "OllamaModels";
+        const otherValue = config.get(otherType, []);
+        const cutoff = Math.min(newValue.length, otherValue.length);
+        ollamaModels = modelChange ? newValue.slice(0, cutoff) : otherValue.slice(0, cutoff);
+        ollamaNames = modelChange ? otherValue.slice(0, cutoff) : newValue.slice(0, cutoff);
+        renderChange = ollama;
+    }
+    
+    const models = ollama ? ollamaModels : openRouterModels;
+    const names = ollama ? ollamaNames : openRouterNames;
+    llmIndex = Math.min(llmIndex, names.length - 1);
+    llmIndex = Math.max(0, llmIndex);
+
+    const payload = {
+        key: "models",
+        value: {
+            names: ollama ? ollamaNames : openRouterNames,
+            index: llmIndex
+        }
+    }
+
+    renderChange && provider.postMessage("configUpdate", payload);
+}
 
 const updateConfig = async (event, provider) => {
     const config = vscode.workspace.getConfiguration("CodenexusAI");
-    if (isChanged("OpenRouterModels", event)) {
-        const models = config.get("OpenRouterModels", []);
+    if (isChanged("OpenRouterModels", event) || isChanged("OllamaModels", event)) {
+        const key = isChanged("OpenRouterModels", event) ? "OpenRouterModels" : "OllamaModels";
+        const models = config.get(key, []);
         const validModels = models.filter((val) => val.trim().length != 0);
-        if (models.length != validModels.length) await config.update("OpenRouterModels", validModels);
-    } else if (isChanged("OpenRouterModelNames", event)) {
-        const modelNames = config.get("OpenRouterModelNames", []);
+        handleModelAndNamesChanges(key, "models", validModels, provider, config);
+    } else if (isChanged("OpenRouterModelNames", event) || isChanged("OllamaModelNames", event)) {
+        const key = isChanged("OpenRouterModelNames", event) ? "OpenRouterModelNames" : "OllamaModelNames";
+        const modelNames = config.get(key, []);
         const validNames = modelNames.filter((val) => val.trim().length != 0);
-        if (modelNames.length != validNames.length) await config.update("OpenRouterModelNames", validNames);
+        handleModelAndNamesChanges(key, "names", validNames, provider, config);
     } else if (isChanged("FilesIncluded", event) || isChanged("FilesExcluded", event)) {
-        configChangeDebounce(config, provider);
+        await configChangeDebounce(config, provider);
+    } else if (isChanged("UseOllama", event)) {
+        ollama = config.get("UseOllama", false);
+        handleModelAndNamesChanges("useOllama", "ollama", [], provider, config);
+    } else if (isChanged("ContextFileSize", event)) {
+        const fileSize = config.get("ContextFileSize", 3);
+        fileHistory.changeSize(fileSize);
+        const payload = { key: "fileSize", value: fileSize };
+        const otherPayload = { value: Array.from(fileHistory.cache) };
+        provider.postMessage("configUpdate", payload);
+        provider.postMessage("fileHistory", otherPayload);
+    } else if (isChanged("ContextInteractionSize", event)) {
+        interactionHistory = config.get("ContextInteractionSize", 5)
+    } else if (isChanged("SystemPrompt", event)) {
+        customSystemPrompt = config.get("SystemPrompt", "").trim()
     }
 }
 
 const getConfigData = async (event=null, provider=null) => {
-    event && await updateConfig(event, provider);
+    if (event && provider) {
+        await updateConfig(event, provider);
+        return;
+    }
+
     const config = vscode.workspace.getConfiguration("CodenexusAI");
-    
     const orModels = config.get("OpenRouterModels", []).filter((val) => val.trim().length != 0);
     const orModelNames = config.get("OpenRouterModelNames", []).filter((val) => val.trim().length != 0);
     const orLength = Math.min(orModels.length, orModelNames.length);
@@ -169,7 +223,7 @@ const updateQueuedChanges = () => {
     queuedChanges = [];
 }
 
-const generateProgram = (panel, stream, final) => {
+const generateProgram = (provider, stream, final) => {
     const currentTime = Date.now();
     if (currentTime - lastCalled < 2000 && !final) return;
     lastCalled = currentTime;
@@ -178,16 +232,15 @@ const generateProgram = (panel, stream, final) => {
     for (const prog of programs) {
         const key = crypto.randomUUID();
         runnablePrograms[key] = prog;
-        panel.webview.postMessage({ command: 'pythonProg', text: prog, key });
+        provider.postMessage('pythonProg', { text: prog, key });
     }
 }
 
-const sendStream = async (panel, stream, final=false, key=null) => {
-    if (!panel || !panel.webview) return;
+const sendStream = async (provider, stream, final=false, key=null) => {
     const showData = stream.replaceAll(token, "");
-    agentMode && generateProgram(panel, stream, final);
+    agentMode && generateProgram(provider, stream, final);
     const html = await mdToHtml(showData);
-    panel.webview.postMessage({ command: "response", text: html, value: final, key });
+    provider.postMessage("response", { text: html, value: final, key });
 };
 
 const addMessage = (messages, role, content) => {
@@ -229,7 +282,7 @@ const generateMessages = async (chat, mentionedCode) => {
     return messages;
 }
 
-const sendChat = async (panel, messages, openChat, chat, index, count, originalQuestion, models, names) => {
+const sendChat = async (provider, messages, openChat, chat, index, count, originalQuestion, models, names) => {
     const startTime = performance.now();
     let sendMessage = true;
     currentResponse = "";
@@ -242,12 +295,12 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
         });
 
         for await (const chunk of stream) {
-            if (sendMessage) panel.webview.postMessage({ command: 'cancelView', value: true });
+            if (sendMessage) provider.postMessage('cancelView', { value: true });
             sendMessage = false;
             if (!continueResponse) break;
             const val = chunk.choices[0]?.delta?.content || "";
             currentResponse += val;
-            if (val.length > 0) writeToFile ? sendToFile(val, outputFileName) : await sendStream(panel, currentResponse);
+            if (val.length > 0) writeToFile ? sendToFile(val, outputFileName) : await sendStream(provider, currentResponse);
         }
 
         if (currentResponse.length === 0 && continueResponse) throw new Error("Error: LLM has given no response!");
@@ -264,14 +317,10 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             const pathToFile = getFilePath(outputFileName);
             const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile}**`;
             sendToFile(`\n\n**${runTime}**\n\n`, outputFileName);
-
-            if (panel && panel.webview) {
-                const html = await mdToHtml(webviewResponse);
-                panel.webview.postMessage({ command: "response", text: html, value: true, key });
-            }
-
+            const html = await mdToHtml(webviewResponse);
+            provider.postMessage("response", { text: html, value: true, key });
         } else {
-            await sendStream(panel, totalResponse, true, key);
+            await sendStream(provider, totalResponse, true, key);
         }
 
         questionHistory.push(chat);
@@ -289,7 +338,7 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
             let totalTime = `${(performance.now() - startTime) / 1000}`;
             totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
             const runTime = `Call to ${names[index]} took ${totalTime} seconds.`;
-            writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : await sendStream(panel, runtime);
+            writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : await sendStream(provider, runtime);
             continueResponse = true;
             return;
         }
@@ -301,15 +350,12 @@ const sendChat = async (panel, messages, openChat, chat, index, count, originalQ
                 responseHistory.push(err.message);
             }
 
-            if (!writeToFile && panel && panel.webview) {
-                panel.webview.postMessage({ command: "error", text: err.message, key: crypto.randomUUID() });
-            } else {
-                vscode.window.showErrorMessage("Error writing to chat: " + err.message);
-            }
+            if (!writeToFile) provider.postMessage("error", { text: err.message, key: crypto.randomUUID() });
+            else vscode.window.showErrorMessage("Error writing to chat: " + err.message);
         } else {
             index += 1;
             index %= models.length;
-            await sendChat(panel, messages, openChat, chat, index, count + 1, originalQuestion, models, names);
+            await sendChat(provider, messages, openChat, chat, index, count + 1, originalQuestion, models, names);
         }
     }
 };
@@ -381,7 +427,6 @@ async function activate(context) {
     vscode.workspace.onDidChangeConfiguration(async (event) => {        
         if (event.affectsConfiguration("CodenexusAI")) {
             await getConfigData(event, provider);
-            await provider.updateHTML();
         }
     })
 
@@ -432,45 +477,43 @@ class CodeNexusViewProvider {
         })
     }
 
-    async handleIncomingData(data) {
+    postMessage(command, payload=null) {
         if (!this._view || !this._view.webview) return;
+        this._view.webview.postMessage({ command, ...payload })
+    }
+
+    async handleIncomingData(data) {
         let trimmed = data.replaceAll("\n", "").replaceAll(" ", "");
-        
         if (trimmed.length > 0) {
             textFromFile = data;
             let htmlText = await mdToHtml("```\n" + data + "\n```");
             await new Promise(res => setTimeout(res, 500));
-            this._view.webview.postMessage({ command: 'content', text: htmlText });
+            this.postMessage('content', { text: htmlText });
         }
-
-        this._view.webview.postMessage({ command: 'focus' });
+        this.postMessage('focus');
     }
 
     updateWorkspacePath() {
-        if (!this._view || !this._view.webview) return;
         if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0) return;
-        this._view.webview.postMessage({ command: 'workspacePath', value: vscode.workspace.workspaceFolders[0].uri.path });
+        this.postMessage('workspacePath', { value: vscode.workspace.workspaceFolders[0].uri.path });
     }
 
     updateFileList(updatePath=true) {
-        if (!this._view || !this._view.webview) return;
         const notOpenFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
-        this._view.webview.postMessage({ command: 'fileTitles', value: fileTitles });
+        this.postMessage('fileTitles', { value: fileTitles });
         if (!notOpenFolder && updatePath) {
-            this._view.webview.postMessage({ command: 'workspacePath', value: vscode.workspace.workspaceFolders[0].uri.path });
+            this.postMessage('workspacePath', { value: vscode.workspace.workspaceFolders[0].uri.path });
         }
     }
 
     updatePageValues() {
-        if (!this._view || !this._view.webview) return;
-        this._view.webview.postMessage({ command: 'updateValues', value: [writeToFile, agentMode, llmIndex, fileHistory.maxSize] });
-        this._view.webview.postMessage({ command: "promptValue", text: promptValue, value: currentMentionedFiles });
-        this._view.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache) });
+        this.postMessage('updateValues', { value: [writeToFile, agentMode, llmIndex, fileHistory.maxSize] });
+        this.postMessage("promptValue", { text: promptValue, value: currentMentionedFiles });
+        this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
     }
 
     loading() {
-        if (!this._view || !this._view.webview) return;
-        this._view.webview.postMessage({ command: "loading", text: this._getSpinner() });
+        this.postMessage("loading", { text: this._getSpinner() });
     }
 
     show() {
@@ -491,11 +534,10 @@ class CodeNexusViewProvider {
     }
 
     inProgress() {
-        if (!this._view || !this._view.webview) return;
         if (currentlyResponding) {
-            this._view.webview.postMessage({ command: "chat", text: userQuestions.at(-1) });
-            this._view.webview.postMessage({ command: "loading", text: this._getSpinner() });
-            this._view.webview.postMessage({ command: "cancelView", value: true });
+            this.postMessage("chat", { text: userQuestions.at(-1) });
+            this.postMessage("loading", { text: this._getSpinner() });
+            this.postMessage("cancelView", { value: true });
         }
     }
 
@@ -510,7 +552,8 @@ class CodeNexusViewProvider {
         };
 
         webviewView.webview.html = await this._getHtmlForWebview();
-        webviewView.webview.postMessage({ command: 'focus' });
+        this.postMessage("configUpdate", { key: 'fileSize', value: fileHistory.maxSize });
+        this.postMessage('focus');
         this.updateFileList();
 
         webviewView.onDidChangeVisibility(async () => {
@@ -523,7 +566,7 @@ class CodeNexusViewProvider {
                 this.updateWorkspacePath();
                 this.updatePageValues();
                 this.updateFileList(false);
-                webviewView.webview.postMessage({ command: 'focus' });
+                this.postMessage('focus');
             } else {
                 textFromFile = "";
             }
@@ -539,7 +582,7 @@ class CodeNexusViewProvider {
                     return;
                 }
                 
-                webviewView.webview.postMessage({ command: 'disableAsk' });
+                this.postMessage('disableAsk');
                 currentlyResponding = true;
                 promptValue = "";
                 currentMentionedFiles = {};
@@ -550,10 +593,7 @@ class CodeNexusViewProvider {
                 writeToFile = message.writeToFile;
                 outputFileName = message.outputFile ? message.outputFile : "output";
 
-                if (webviewView && webviewView.webview) {
-                    webviewView.webview.postMessage({ command: 'chat', text: userQuestion });
-                }
-                
+                this.postMessage('chat', { text: userQuestion });
                 if (writeToFile) sendToFile("## " + userQuestion + "\n\n", outputFileName);
 
                 let text = message.text;
@@ -564,14 +604,14 @@ class CodeNexusViewProvider {
                 }
 
                 this.loading();                
-                webviewView.webview.postMessage({ command: 'content', text: '' });
+                this.postMessage('content', { text: '' });
 
                 const messages = await generateMessages(text, textFromFile);
-                webviewView.webview.postMessage({ command: 'fileContext', value: Array.from(fileHistory.cache) });
+                this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
                 textFromFile = "";
-                if (ollama) await sendChat(webviewView, messages, this.ollamaChat, text, llmIndex, 0, userQuestion, ollamaModels, ollamaNames)
-                else await sendChat(webviewView, messages, this.openChat, text, llmIndex, 0, userQuestion, openRouterModels, openRouterNames);
-                webviewView.webview.postMessage({ command: 'cancelView', value: false });
+                if (ollama) await sendChat(this, messages, this.ollamaChat, text, llmIndex, 0, userQuestion, ollamaModels, ollamaNames)
+                else await sendChat(this, messages, this.openChat, text, llmIndex, 0, userQuestion, openRouterModels, openRouterNames);
+                this.postMessage('cancelView', { value: false });
 
                 updateQueuedChanges();
                 currentlyResponding = false;
@@ -583,12 +623,12 @@ class CodeNexusViewProvider {
             } else if (message.command === 'remove') {
                 textFromFile = "";
             } else if (message.command === 'clearHistory') {
-                webviewView.webview.postMessage({ command: 'history', value: currentlyResponding });
+                this.postMessage('history', { value: currentlyResponding });
                 questionsAndResponses = [];
                 runnablePrograms = {};
             } else if (message.command === 'stopResponse') {
                 continueResponse = false;
-                webviewView.webview.postMessage({ command: 'cancelView', value: false });
+                this.postMessage('cancelView', { value: false });
             } else if (message.command === 'outputToFile') {
                 if (currentlyResponding) queuedChanges.push([message.command, message.checked]);
                 else writeToFile = message.checked;
@@ -614,7 +654,7 @@ class CodeNexusViewProvider {
                 await vscode.commands.executeCommand("workbench.action.openSettings", "CodenexusAI")
             } else if (message.command === 'refreshFiles') {
                 fileTitles = await getAllFiles(include, exclude, defaultInclude, defaultExclude);
-                webviewView.webview.postMessage({ command: 'fileTitles', value: fileTitles });
+                this.postMessage('fileTitles', { value: fileTitles });
             } else if (message.command === 'updateApiKey') {
                 await vscode.commands.executeCommand('codenexus-ai.changeApiKey');
             }
