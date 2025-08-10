@@ -371,6 +371,7 @@ const getCorrectFilename = (string) => {
         while ((match = regEx.exec(string)) !== null) {
             const start = match.index;
             const end = start + match[0].length;
+            if (start > relativeCursorPosition) break;
             if (start <= relativeCursorPosition && end >= relativeCursorPosition) {
                 word = match[0];
                 wordStartIndex = startIndex + start;
