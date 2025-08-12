@@ -2,10 +2,11 @@ const vscode = require("vscode");
 const fs = require("node:fs");
 const path = require('path');
 const seen = new Set();
+const fileRegEx = new RegExp(/\B@(?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_-]+)/g);
 
 /** Constructs the file path for a given filename. */
 const getFilePath = (filename, fileType='md') => {
-    const filePath = path.join(vscode.workspace.workspaceFolders[0].uri.path, `${filename}.${fileType}`);
+    const filePath = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, `${filename}.${fileType}`);
     return filePath.at(0) == '/' || filePath.at(0) == '\\' ? filePath.slice(1) : filePath;
 }
 
@@ -62,8 +63,7 @@ const replaceFileMentions = (question, files) => {
 /** Highlights filename mentions in text. */
 const highlightFilenameMentions = (text, fileTitles) => {
     text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-    const regEx = new RegExp(/\B@(?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_-]+)/g);
-    return text.replace(regEx, (match) => {
+    return text.replace(fileRegEx, (match) => {
         const title = match.substring(1);
         if (!(title in fileTitles)) return match;
         return "<code>" + match + "</code>";
@@ -74,10 +74,10 @@ const highlightFilenameMentions = (text, fileTitles) => {
 const getFileNames = (allFiles) => {
     let fileTitles = {};
     for (const file of allFiles) {
-        let title = path.basename(file.path);
+        let title = path.basename(file.fsPath);
         if (!title) continue;
-        if (title in fileTitles) fileTitles[title].push(file.path);
-        else fileTitles[title] = [file.path];
+        if (title in fileTitles) fileTitles[title].push(file.fsPath);
+        else fileTitles[title] = [file.fsPath];
     }
     return fileTitles;
 };
@@ -176,8 +176,6 @@ const createVSCodeTerminal = (basePath) => {
 const runPythonFile = async (text) => {
     const filePath = getFilePath("run_py", "py");
     const basePath = path.dirname(filePath);
-    if (basePath.at(0) == '\\' || basePath.at(0) == '/') basePath = basePath.substring(1);
-
     const isDangerous = await checkCodeForDangerousPatterns(text);
     if (isDangerous) {
         return;
@@ -245,7 +243,7 @@ class LRUCache {
 
     /** Composes all of the text from the files stored in the LRUCache. */
     async getTextFile() {
-        let textFromFiles = "Files mentioned in order from newest to oldest:\n\n";
+        let textFromFiles = "Files recently mentioned:\n\n";
         
         for (const [location, fileName] of Array.from(this.cache)) {
             const fileText = await getTextFromFile(location);
@@ -261,6 +259,7 @@ class LRUCache {
 }
 
 module.exports = {
+    fileRegEx,
     getFilePath,
     getAllFiles,
     debounce,

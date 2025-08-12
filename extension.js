@@ -16,6 +16,7 @@ const rehypeStringify = rehypeStringifyMod.default || rehypeStringifyMod;
 const rehypeSanitize = rehypeSanitizeMod.default || rehypeSanitizeMod;
 
 const {
+    fileRegEx,
     getFilePath,
     getAllFiles,
     sendToFile,
@@ -40,6 +41,7 @@ let currentResponse = "";
 let textFromFile = "";
 let promptValue = "";
 let currentMentionedFiles = {};
+let locationOfMentionedFiles = [];
 
 let llmIndex = 0;
 let writeToFile = false;
@@ -94,6 +96,21 @@ let openRouterNames = [];
 let ollamaModels = [];
 let ollamaNames = [];
 let customSystemPrompt = "";
+
+const addFileInfoToUserQuestion = (message) => {
+    let count = 0;
+    const infoMessage = message.replace(fileRegEx, (match) => {
+        const title = match.substring(1);
+        if (!(title in fileTitles)) return match;
+        const location = locationOfMentionedFiles.at(count);
+        if (location === undefined) return match;
+        count++;
+        return `${title} (${location})`
+    })
+
+    locationOfMentionedFiles = [];
+    return infoMessage;
+}
 
 const mdToHtml = async (md) => {
     const file = await mdProcessor.process(md || '');
@@ -253,11 +270,13 @@ const addMessage = (messages, role, content) => {
 const generateMessages = async (chat, mentionedCode) => {
     const messages = [];
     const noFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
+    let completeMessage = addFileInfoToUserQuestion(chat);
     let baseMessage = "";
 
+    if (mentionedCode && mentionedCode.length > 0) completeMessage += '\n\n' + mentionedCode;
+
     if (!noFolder) {
-        let basePath = vscode.workspace.workspaceFolders[0].uri.path;
-        if (basePath.at(0) == '/' || basePath.at(0) == '\\') basePath = basePath.substring(1);
+        let basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
         baseMessage = `BASE WORKSPACE PATH: ${basePath}`
     }
 
@@ -278,7 +297,7 @@ const generateMessages = async (chat, mentionedCode) => {
         addMessage(messages, 'assistant', systemResponse);
     }
 
-    addMessage(messages, 'user', mentionedCode.length > 0 ? chat + '\n\n' + mentionedCode : chat);
+    addMessage(messages, 'user', completeMessage);
     return messages;
 }
 
@@ -495,14 +514,14 @@ class CodeNexusViewProvider {
 
     updateWorkspacePath() {
         if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0) return;
-        this.postMessage('workspacePath', { value: vscode.workspace.workspaceFolders[0].uri.path });
+        this.postMessage('workspacePath', { value: vscode.workspace.workspaceFolders[0].uri.fsPath });
     }
 
     updateFileList(updatePath=true) {
         const notOpenFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
         this.postMessage('fileTitles', { value: fileTitles });
         if (!notOpenFolder && updatePath) {
-            this.postMessage('workspacePath', { value: vscode.workspace.workspaceFolders[0].uri.path });
+            this.postMessage('workspacePath', { value: vscode.workspace.workspaceFolders[0].uri.fsPath });
         }
     }
 
@@ -600,13 +619,14 @@ class CodeNexusViewProvider {
                 for (const [index, info] of Object.entries(message.mentionedFiles)) {
                     const [file, location] = info;
                     fileHistory.put(location, file);
+                    locationOfMentionedFiles.push(location);
                     text = replaceFileMentions(text, ["@" + file]);
                 }
 
                 this.loading();                
                 this.postMessage('content', { text: '' });
 
-                const messages = await generateMessages(text, textFromFile);
+                const messages = await generateMessages(message.text, textFromFile);
                 this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
                 textFromFile = "";
                 if (ollama) await sendChat(this, messages, this.ollamaChat, text, llmIndex, 0, userQuestion, ollamaModels, ollamaNames)
