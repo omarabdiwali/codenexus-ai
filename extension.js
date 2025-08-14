@@ -126,7 +126,7 @@ const fileConfigChange = async (config, provider) => {
 
 const configChangeDebounce = debounce(fileConfigChange, 3000);
 
-const handleModelAndNamesChanges = (change, type, newValue, provider, config) => {
+const handleModelAndNameChanges = (change, type, newValue, provider, config) => {
     const modelChange = type === "models";
     let renderChange = true;
     if (change.startsWith("OpenRouter")) {
@@ -145,7 +145,6 @@ const handleModelAndNamesChanges = (change, type, newValue, provider, config) =>
         renderChange = ollama;
     }
     
-    const models = ollama ? ollamaModels : openRouterModels;
     const names = ollama ? ollamaNames : openRouterNames;
     llmIndex = Math.min(llmIndex, names.length - 1);
     llmIndex = Math.max(0, llmIndex);
@@ -153,7 +152,7 @@ const handleModelAndNamesChanges = (change, type, newValue, provider, config) =>
     const payload = {
         key: "models",
         value: {
-            names: ollama ? ollamaNames : openRouterNames,
+            names,
             index: llmIndex
         }
     }
@@ -167,17 +166,17 @@ const updateConfig = async (event, provider) => {
         const key = isChanged("OpenRouterModels", event) ? "OpenRouterModels" : "OllamaModels";
         const models = config.get(key, []);
         const validModels = models.filter((val) => val.trim().length != 0);
-        handleModelAndNamesChanges(key, "models", validModels, provider, config);
+        handleModelAndNameChanges(key, "models", validModels, provider, config);
     } else if (isChanged("OpenRouterModelNames", event) || isChanged("OllamaModelNames", event)) {
         const key = isChanged("OpenRouterModelNames", event) ? "OpenRouterModelNames" : "OllamaModelNames";
         const modelNames = config.get(key, []);
         const validNames = modelNames.filter((val) => val.trim().length != 0);
-        handleModelAndNamesChanges(key, "names", validNames, provider, config);
+        handleModelAndNameChanges(key, "names", validNames, provider, config);
     } else if (isChanged("FilesIncluded", event) || isChanged("FilesExcluded", event)) {
         await configChangeDebounce(config, provider);
     } else if (isChanged("UseOllama", event)) {
         ollama = config.get("UseOllama", false);
-        handleModelAndNamesChanges("useOllama", "ollama", [], provider, config);
+        handleModelAndNameChanges("useOllama", "ollama", [], provider, config);
     } else if (isChanged("ContextFileSize", event)) {
         const fileSize = config.get("ContextFileSize", 3);
         fileHistory.changeSize(fileSize);
