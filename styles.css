@@ -10,6 +10,9 @@ body, html {
     overflow-y: hidden;
     --border-radius-size: 7px;
 }
+blockquote {
+    background-color: transparent;
+}
 .chat-entry {
     margin-bottom: 10px;
     border-bottom: 1px solid var(--vscode-editor-foreground);
