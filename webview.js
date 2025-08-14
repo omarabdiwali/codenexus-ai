@@ -25,6 +25,7 @@ let contextedFilesStorage = [];
 let queue = [];
 let lastMatching = 0;
 let alreadyMatched = {};
+let autocompleteUsed = false;
 
 /** Creates a div element showing context file count (current/total). */
 const createNumberOfFiles = (fileCount) => {
@@ -428,6 +429,7 @@ const createSearchItem = (file, value) => {
         item.style.background = null;
     })
     item.addEventListener('click', (event) => {
+        autocompleteUsed = true;
         replaceCursorWord(lastCursorPosition, [file, value]);
         vscode.postMessage({ command: 'updatePrompt', value: prompt.value, files: mentionedFiles });
     })
@@ -439,6 +441,36 @@ const createSearchItem = (file, value) => {
     })
     return item;
 }
+
+/** Orders file options based on mention status, position, and alphabetical order. */
+const orderFileOptions = (options) => {
+    return options.sort((a, b) => {
+        const [fileNameA, locationA] = a;
+        const [fileNameB, locationB] = b;
+
+        const entryA = Object.entries(mentionedFiles).find(
+            ([key, [name, loc]]) => name === fileNameA && loc === locationA
+        );
+        const entryB = Object.entries(mentionedFiles).find(
+            ([key, [name, loc]]) => name === fileNameB && loc === locationB
+        );
+
+        const isMentionedA = !!entryA;
+        const isMentionedB = !!entryB;
+
+        if (isMentionedA && !isMentionedB) return -1;
+        if (!isMentionedA && isMentionedB) return 1;
+        if (isMentionedA && isMentionedB) {
+            const keyA = parseInt(entryA[0]);
+            const keyB = parseInt(entryB[0]);
+            return keyB - keyA;
+        }
+
+        const nameCompare = fileNameA.localeCompare(fileNameB);
+        if (nameCompare !== 0) return nameCompare;        
+        return locationA.localeCompare(locationB);
+    });
+};
 
 /** Displays the filename suggestions dropdown. */
 const showFileOptions = (string) => {
@@ -463,15 +495,22 @@ const showFileOptions = (string) => {
         return;
     }
 
+    let flatOptions = [];
     for (const [fileName, locations] of options) {
         for (const loc of locations) {
-            const row = createSearchItem(fileName, loc);
-            fileSearch.appendChild(row);
+            flatOptions.push([fileName, loc]);
         }
     }
 
+    const orderedOptions = orderFileOptions(flatOptions);
+    for (const [fileName, location] of orderedOptions) {
+        const row = createSearchItem(fileName, location);
+        fileSearch.appendChild(row);
+    }
+
     fileSearch.style.display = 'flex';
-}
+};
+
 
 /** Calculates the Levenshtein distance between two strings. */
 const levenDist = (a, b) => {
@@ -552,6 +591,7 @@ updateKey.addEventListener("click", () => {
 })
 
 prompt.addEventListener("keydown", (event) => {
+    autocompleteUsed = false;
     if (event.key == "Enter" && !event.shiftKey && ask.innerText == "Ask" && !ask.disabled) {
         event.preventDefault();
         queue = [];
@@ -562,11 +602,13 @@ prompt.addEventListener("keydown", (event) => {
 })
 
 prompt.addEventListener("input", (event) => {
+    autocompleteUsed = false;
     mentionedFiles = shiftStartIndexes(prevPrompt, prompt.value);
     vscode.postMessage({ command: 'updatePrompt', value: prompt.value, files: mentionedFiles });
 });
 
 prompt.addEventListener("selectionchange", (event) => {
+    if (autocompleteUsed) return;
     let cursorWord = findCurrentCursorWord(event.target.value, event.target.selectionStart);
     showFileOptions(cursorWord);
 })
