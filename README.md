@@ -7,33 +7,33 @@
 
 A powerful VSCode extension that brings multi-LLM intelligence to your coding workflow, with advanced context awareness and code execution capabilities.
 
-![Extension Demo](https://i.imgur.com/vYn0b3n.png)
+![Extension Demo](https://i.imgur.com/LdPUDcZ.png)
 
 ## ✨ Features
 
-- **Multi-LLM Support**: Switch between 5 different language models with automatic fallback
-- **Ollama Usage**: Ability to switch and use Ollama LLMs exclusively, making everything local
+- **Multi-LLM Support**: Switch between 5 different language models with automatic fallback.
+- **Ollama Usage**: Ability to switch and use Ollama LLMs exclusively, making everything local.
 - **Code Context Awareness**:
-  - `@filename` syntax with auto-complete
-  - LRU cached file context (3-file memory)
-  - Highlight-to-chat integration (Ctrl+K/Cmd+K)
+  - `@filename` syntax with auto-complete.
+  - LRU cached file context (3-file memory).
+  - Highlight-to-chat integration (Ctrl+K/Cmd+K).
 - **Agent Mode**: 
-  - Safe code execution environment
-  - Python program generation/validation
-  - Real-time code execution results
+  - Safe code execution environment.
+  - Python program generation/validation.
+  - Real-time code execution results.
 - **Conversation Management**:
-  - 5-message history retention
-  - One-click history clearance
+  - 5-message history retention.
+  - One-click history clearance.
 - **OpenRouter Integration**: 
-  - Secure API key management with automatic validation
+  - Secure API key management with automatic validation.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 16+
-- Python 3.8+ (for Agent Mode)
-- [OpenRouter API Key](https://openrouter.ai/)
-- [Ollama](https://ollama.com) (optional, needed if you want access to local LLMs)
+- Node.js 16+.
+- Python 3.8+ (for Agent Mode).
+- [OpenRouter API Key](https://openrouter.ai/).
+- [Ollama](https://ollama.com) (optional, needed if you want access to local LLMs).
 
 ### Installation
 ```bash
@@ -49,22 +49,22 @@ code --install-extension codenexus-ai-*.vsix
 
 ### Basic Chat
 1. Open the extension from the activity bar.
-2. Use `@filename` to reference open files
-3. Highlight code + Ctrl/K for instant context
+2. Use `@filename` to reference files in your working directory.
+3. Highlight code + Ctrl/K for instant context.
 
 ### Agent Mode
-![Agent Mode Demo](https://i.imgur.com/GwSZ77V.png)
-1. Start query with "Please create..." or "Write a program to..."
-2. Review generated Python code
-3. Click "Run" for safe execution
+![Agent Mode Demo](https://i.imgur.com/vLAuwSa.png)
+1. Start query with "Please create..." or "Write a program to...".
+2. Review generated Python code.
+3. Click "Run" for execution.
 
 ### Context Management
-- Click `×` on file tags to remove from context
-- Use "Clear History" button to reset conversation
+- Click `×` on file tags to remove from context.
+- Use 'Trash' button to reset conversation.
 
 ## ⚙️ Configuration
-1. First launch automatically prompts for API key
-2. Update key from the extension webview or via command: `CodeNexus AI: Change API Key`
+1. First launch automatically prompts for API key.
+2. Ability to update key from the extension webview or via command: `CodeNexus AI: Change API Key`.
 
 **Additional Optional Configuration**:
   - `Context File Size`: Maximum number of files that can be kept for context (LRU size).
@@ -74,7 +74,7 @@ code --install-extension codenexus-ai-*.vsix
   - `Model Names`: Names of the large language models using [OpenRouter](https://openrouter.ai/models).
   - `Models`: Unique IDs of the large language models from [OpenRouter](https://openrouter.ai/models) (list Models and Model Names in the same order).
   - `System Prompt`: Custom system prompt, which will be added in addition to the 'Agent' prompt when in Agent Mode.
-  - `Ollama Models`: Unique models that you have downloaded locally from Ollama (ex. `gemma3:1b`)
+  - `Ollama Models`: Unique models that you have downloaded locally from Ollama (ex. `gemma3:1b`).
   - `Ollama Names`: Names of the models from Ollama (ex. `Gemma 3 (1b)`).
   - `Use Ollama`: Use Ollama to run local LLMs.
 
@@ -85,8 +85,8 @@ code --install-extension codenexus-ai-*.vsix
 Add local AI capabilities using Ollama's lightweight framework:
 
 **Setup**:
-1. Install [Ollama](https://ollama.com/download)
-2. Pull models from Ollama (`ollama pull gemma3:1b`)
+1. Install [Ollama](https://ollama.com/download).
+2. Pull models from Ollama (`ollama pull gemma3:1b`).
 3. Add the model and the name to the configuration option.
 4. Check the '*Use Ollama*' configuration option.
 5. Select and use the LLM from the extension window.
@@ -94,27 +94,27 @@ Add local AI capabilities using Ollama's lightweight framework:
 ## 📂 Project Structure
 | File             | Purpose                                  |
 |------------------|------------------------------------------|
-| `extension.js`   | Main extension logic & VSCode integration|
-| `webview.js`     | Chat UI & message handling               |
-| `functions.js`   | Utilities & core functionality           |
-| `styles.css`     | Visual styling                           |
-| `spinner.css`    | Loading animation                        |
+| `extension.js`   | Main extension logic & VSCode integration.|
+| `webview.js`     | Chat UI & message handling.               |
+| `functions.js`   | Utilities & core functionality.           |
+| `styles.css`     | Visual styling.                           |
+| `spinner.css`    | Loading animation.                        |
 
 ## 🛡️ Safety Features
-- Code execution sandboxing
-- Dangerous pattern detection in generated code
-- Automatic Python environment cleanup
+- Code execution sandboxing.
+- Dangerous pattern detection in generated code.
+- Automatic Python environment cleanup.
 
 ## 🤝 Contributing
 We welcome contributions! Please follow our guidelines:
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/your-feature`)
-3. Commit changes
-4. Push to branch
-5. Open PR with detailed description
+1. Fork the repository.
+2. Create feature branch (`git checkout -b feature/your-feature`).
+3. Commit changes.
+4. Push to branch.
+5. Open PR with detailed description.
 
 ## 📄 License
-MIT License - See [LICENSE](LICENSE) for details
+MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
