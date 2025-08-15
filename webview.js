@@ -27,7 +27,11 @@ let lastMatching = 0;
 let alreadyMatched = {};
 let autocompleteUsed = false;
 
-/** Creates a div element showing context file count (current/total). */
+/**
+ * Creates a div element showing context file count (current/total).
+ * @param {number} fileCount - The current number of context files.
+ * @returns {HTMLDivElement} The file count element.
+ */
 const createNumberOfFiles = (fileCount) => {
     const files = document.createElement('div');
     files.id = 'file-number'
@@ -38,14 +42,20 @@ const createNumberOfFiles = (fileCount) => {
     return files;
 }
 
-/** Updates displayed context file count in the UI. */
+/**
+ * Updates displayed context file count in the UI.
+ * @param {number} size - The new file count to display.
+ */
 const replaceContextFileCount = (size) => {
     const newCount = createNumberOfFiles(size);
     const oldCount = contextFiles.lastElementChild;
     contextFiles.replaceChild(newCount, oldCount);
 }
 
-/** Removes a deleted context file from storage and UI. */
+/**
+ * Removes a deleted context file from storage and UI.
+ * @param {string} location - The file path of the context file to remove.
+ */
 const removeDeletedContext = (location) => {
     const index = contextedFilesStorage.findIndex((val) => val[0] == location);
     contextedFilesStorage.splice(index, 1);
@@ -54,7 +64,12 @@ const removeDeletedContext = (location) => {
     replaceContextFileCount(contextedFilesStorage.length);
 }
 
-/** Creates UI element for a context file with remove button. */
+/**
+ * Creates UI element for a context file with remove button.
+ * @param {string} fileName - The name of the file.
+ * @param {string} location - The full path of the file.
+ * @returns {boolean} True if the element was created successfully, false otherwise.
+ */
 const createContextedFileElement = (fileName, location) => {
     if (!baseWorkspacePath) return false;
 
@@ -84,7 +99,9 @@ const createContextedFileElement = (fileName, location) => {
     return true;
 }
 
-/** Renders all context files in the UI with count display. */
+/**
+ * Renders all context files in the UI with count display.
+ */
 const addContextedFiles = () => {
     contextFiles.replaceChildren();
     let fileCount = 0;
@@ -102,7 +119,11 @@ const addContextedFiles = () => {
     }
 }
 
-/** Formats user questions by highlighting '@mentioned' files. */
+/**
+ * Formats user questions by highlighting '@mentioned' files.
+ * @param {string} text - The text to format.
+ * @returns {string} The formatted text with highlighted mentions.
+ */
 const formatUserQuestion = (text) => {
     text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>');
     return text.replace(regEx, (match) => {
@@ -112,7 +133,11 @@ const formatUserQuestion = (text) => {
     });
 };
 
-/** Creates a 'Run' button for executable code blocks. */
+/**
+ * Creates a 'Run' button for executable code blocks.
+ * @param {string} key - The key identifier for the code block.
+ * @returns {HTMLButtonElement} The run button element.
+ */
 const generateRunButton = (key) => {
     const runButton = document.createElement('button');
     runButton.innerText = 'Run';
@@ -126,7 +151,11 @@ const generateRunButton = (key) => {
     return runButton;
 }
 
-/** Creates a 'Copy' button for code blocks. */
+/**
+ * Creates a 'Copy' button for code blocks.
+ * @param {string} text - The text to copy.
+ * @returns {HTMLButtonElement} The copy button element.
+ */
 const generateCopyButton = (text) => {
     const copyButton = document.createElement('button');
     copyButton.innerText = 'Copy';
@@ -141,12 +170,16 @@ const generateCopyButton = (text) => {
     return copyButton;
 }
 
-/** Adds action buttons (run/copy) to code blocks in responses. */
+/**
+ * Adds action buttons (run/copy) to code blocks in responses.
+ * @param {HTMLElement} codeBlock - The code block element.
+ * @param {number} currentTime - The current time for matching purposes.
+ */
 const generateButtons = (codeBlock, currentTime) => {
     const container = document.createElement('div');
     const buttonDiv = document.createElement('div');
     if (!codeBlock.textContent) return;
-    const copyButton = generateCopyButton(codeBlock.textContent);
+    const copyButton = generateCopyButton(codeBlock.textContent.trim());
 
     container.classList.add('code-container');
     buttonDiv.classList.add('code-container-buttons');
@@ -174,7 +207,10 @@ const generateButtons = (codeBlock, currentTime) => {
     container.appendChild(buttonDiv);
 };
 
-/** Creates UI for cancelable code blocks for mentioned code. */
+/**
+ * Creates UI for cancelable code blocks for mentioned code.
+ * @param {HTMLElement} codeBlock - The code block element.
+ */
 const cancelButtons = (codeBlock) => {
     const container = document.createElement('div');    
     const header = document.createElement('div');
@@ -195,14 +231,19 @@ const cancelButtons = (codeBlock) => {
     container.appendChild(codeBlock);
 };
 
-/** Adds copy buttons to all existing code blocks. */
+/**
+ * Adds copy buttons to all existing code blocks.
+ */
 const addCopyButtons = () => {
     document.querySelectorAll("#chat-history pre code").forEach(codeBlock => {
         generateButtons(codeBlock, null);
     });
 };
 
-/** Highlights new code blocks and adds interaction buttons. */
+/**
+ * Highlights new code blocks and adds interaction buttons.
+ * @param {number} currentTime - The current time for matching purposes.
+ */
 const highlightNewCodeBlocks = (currentTime = Date.now()) => {
     const newCodeBlocks = document.querySelectorAll("#chat-history pre code:not(.hljs)");
     newCodeBlocks.forEach(codeBlock => {
@@ -212,7 +253,9 @@ const highlightNewCodeBlocks = (currentTime = Date.now()) => {
     });
 };
 
-/** Applies syntax highlighting to mentioned code blocks. */
+/**
+ * Applies syntax highlighting to mentioned code blocks.
+ */
 const highlightMentionedCodeBlock = () => {
     document.querySelectorAll("#content pre code").forEach(codeBlock => {
         hljs.highlightElement(codeBlock);
@@ -221,13 +264,19 @@ const highlightMentionedCodeBlock = () => {
     });
 };
 
-/** Initial syntax highlighting setup for all code blocks. */
+/**
+ * Initial syntax highlighting setup for all code blocks.
+ */
 const highlightAllCodeBlocks = () => {
     hljs.highlightAll();
     addCopyButtons();
 };
 
-/** Generates a delete button for a chat entry. */
+/**
+ * Generates a delete button for a chat entry.
+ * @param {HTMLElement} chatEntry - The chat entry element.
+ * @param {string} key - The key identifier for the chat entry.
+ */
 const generateCloseButton = (chatEntry, key) => {
     const button = document.createElement('button');
     button.innerText = 'X';
@@ -240,7 +289,9 @@ const generateCloseButton = (chatEntry, key) => {
     chatEntry.appendChild(button);
 }
 
-/** Adds delete buttons to all existing chat entries. */
+/**
+ * Adds delete buttons to all existing chat entries.
+ */
 const addCloseButtons = () => {
     document.querySelectorAll(".chat-entry").forEach((element) => {
         generateCloseButton(element, element.id);
@@ -265,7 +316,10 @@ outputFileNameInput.addEventListener("input", (e) => {
     e.target.value = filteredValue;
 })
 
-/** Toggles output filename input based on checkbox state. */
+/**
+ * Toggles output filename input based on checkbox state.
+ * @param {Event} e - The event object.
+ */
 const handleDisable = (e) => {
     e.preventDefault();
     outputFileNameInput.disabled = !writeToFileCheckbox.checked;
@@ -274,7 +328,10 @@ const handleDisable = (e) => {
 
 writeToFileCheckbox.addEventListener('change', handleDisable);
 
-/** Appends a new user question to chat history, and creates a div for the response. */
+/**
+ * Appends a new user question to chat history, and creates a div for the response.
+ * @param {string} question - The user's question.
+ */
 const appendToChat = (question) => {
     const chatEntry = document.createElement('div');
     chatEntry.classList.add('chat-entry');
@@ -295,7 +352,12 @@ const appendToChat = (question) => {
     responseArea.scrollTop = responseArea.scrollHeight;
 }
 
-/** Finds start index of difference between two strings. */
+/**
+ * Finds start index of difference between two strings.
+ * @param {string} oldStr - The old string.
+ * @param {string} newStr - The new string.
+ * @returns {number} The start index of the difference.
+ */
 const findChangeStart = (oldStr, newStr) => {
   const minLen = Math.min(oldStr.length, newStr.length);
   for (let i = 0; i < minLen; i++) {
@@ -304,7 +366,12 @@ const findChangeStart = (oldStr, newStr) => {
   return minLen;
 }
 
-/** Adjusts file mention indexes after prompt changes, and removes them if necessary. */
+/**
+ * Adjusts file mention indexes after prompt changes, and removes them if necessary.
+ * @param {string} oldStr - The old string.
+ * @param {string} newStr - The new string.
+ * @returns {{ [startIndex: number]: [filename: string, fileLocation: string] }} The updated mentioned files object.
+ */
 const shiftStartIndexes = (oldStr, newStr) => {
     const diffStart = findChangeStart(oldStr, newStr);
     const diffLength = newStr.length - oldStr.length;
@@ -322,7 +389,10 @@ const shiftStartIndexes = (oldStr, newStr) => {
     return newMentionedFiles;
 }
 
-/** Verifies '@mentioned' files exist in workspace before sending. */
+/**
+ * Verifies '@mentioned' files exist in workspace before sending.
+ * @param {string} value - The prompt value to check.
+ */
 const verifyMentionedFiles = (value) => {
     let match;
     let verified = {};
@@ -342,7 +412,12 @@ const verifyMentionedFiles = (value) => {
     mentionedFiles = verified;
 }
 
-/** Finds boundaries of current word at cursor position. */
+/**
+ * Finds boundaries of current word at cursor position.
+ * @param {string} value - The text value.
+ * @param {number} start - The cursor start position.
+ * @returns {Array<number>} The start and end indexes of the word.
+ */
 const startAndEndIndexForCursorWord = (value, start) => {
     let startIndex = value.substring(0, start).lastIndexOf(' ');
     let endIndex = value.substring(start).indexOf(' ');
@@ -351,14 +426,23 @@ const startAndEndIndexForCursorWord = (value, start) => {
     return [startIndex, endIndex];
 }
 
-/** Gets word at current cursor position. */
+/**
+ * Gets word at current cursor position.
+ * @param {string} value - The text value.
+ * @param {number} start - The cursor start position.
+ * @returns {string} The word at the cursor position.
+ */
 const findCurrentCursorWord = (value, start) => {
     lastCursorPosition = start;
     const [startIndex, endIndex] = startAndEndIndexForCursorWord(value, start);
     return value.substring(startIndex, endIndex);
 }
 
-/** Returns the correct current auto-complete filename candidate, the filename and the start index. */
+/**
+ * Returns the correct current auto-complete filename candidate, the filename and the start index.
+ * @param {string} string - The string to search in.
+ * @returns {Array} The word and start index, or empty array if not found.
+ */
 const getCorrectFilename = (string) => {
     const initialMatch = string.match(regEx);
     const [startIndex, endIndex] = startAndEndIndexForCursorWord(prompt.value, lastCursorPosition);
@@ -392,7 +476,11 @@ const getCorrectFilename = (string) => {
     return [word, wordStartIndex];
 }
 
-/** Replaces cursor word with selected filename from autocomplete. */
+/**
+ * Replaces cursor word with selected filename from autocomplete.
+ * @param {number} start - The start position of the word.
+ * @param {Array} fileInfo - The file information [fileName, location].
+ */
 const replaceCursorWord = (start, fileInfo) => {
     const value = prompt.value;
     const [word, location] = fileInfo;
@@ -413,7 +501,12 @@ const replaceCursorWord = (start, fileInfo) => {
     fileSearch.style.display = 'none';
 }
 
-/** Creates clickable file autocomplete suggestions. */
+/**
+ * Creates clickable file autocomplete suggestions.
+ * @param {string} file - The file name.
+ * @param {string} value - The file path.
+ * @returns {HTMLDivElement} The search item element.
+ */
 const createSearchItem = (file, value) => {
     if (!baseWorkspacePath) return;
     const item = document.createElement('div');
@@ -442,7 +535,11 @@ const createSearchItem = (file, value) => {
     return item;
 }
 
-/** Orders file options based on mention status, position, and alphabetical order. */
+/**
+ * Orders file options based on mention status, position, and alphabetical order.
+ * @param {Array} options - The file options to sort.
+ * @returns {Array} The sorted file options.
+ */
 const orderFileOptions = (options) => {
     return options.sort((a, b) => {
         const [fileNameA, locationA] = a;
@@ -472,7 +569,10 @@ const orderFileOptions = (options) => {
     });
 };
 
-/** Displays the filename suggestions dropdown. */
+/**
+ * Displays the filename suggestions dropdown.
+ * @param {string} string - The string to search for matches.
+ */
 const showFileOptions = (string) => {
     fileSearch.replaceChildren();
     const [word, start] = getCorrectFilename(string);
@@ -512,7 +612,12 @@ const showFileOptions = (string) => {
 };
 
 
-/** Calculates the Levenshtein distance between two strings. */
+/**
+ * Calculates the Levenshtein distance between two strings.
+ * @param {string} a - First string.
+ * @param {string} b - Second string.
+ * @returns {number} The Levenshtein distance.
+ */
 const levenDist = (a, b) => {
     const tmp = [];
     let i, j, alen = a.length, blen = b.length, score, alen1 = alen + 1, blen1 = blen + 1;
@@ -533,7 +638,11 @@ const levenDist = (a, b) => {
     return tmp[alen][blen];
 }
 
-/** Normalizes whitespace in a string. */
+/**
+ * Normalizes whitespace in a string.
+ * @param {string} str - The string to normalize.
+ * @returns {string} The normalized string.
+ */
 const normalizeString = (str) => {
   return str
     .replace(/\s+/g, ' ')
@@ -541,7 +650,11 @@ const normalizeString = (str) => {
     .replace(/\r\n|\r/g, '\n');
 }
 
-/** Escapes special characters in a string. */
+/**
+ * Escapes special characters in a string.
+ * @param {string} str - The string to escape.
+ * @returns {string} The escaped string.
+ */
 const escapeString = (str) => {
   return str
     .replace(/\\/g, '\\\\')
@@ -551,7 +664,12 @@ const escapeString = (str) => {
     .replace(/\t/g, '\\t');
 }
 
-/** Compares code blocks with high similarity threshold. */
+/**
+ * Compares code blocks with high similarity threshold.
+ * @param {string} codeBlock - The code block to compare.
+ * @param {string} value - The value to compare against.
+ * @returns {boolean} True if the code blocks are similar, false otherwise.
+ */
 const comapreCodeBlock = (codeBlock, value) => {
     const normCode = escapeString(normalizeString(codeBlock));
     const normValue = escapeString(normalizeString(value));
@@ -561,6 +679,11 @@ const comapreCodeBlock = (codeBlock, value) => {
     return similarity >= 0.95;
 }
 
+/**
+ * Generates dropdown values for LLM selection.
+ * @param {Array<string>} names - The LLM names.
+ * @param {number} index - The selected index.
+ */
 const generateLLMDropdownValues = (names, index) => {
     llmSelect.innerHTML = "";
     for (let i = 0; i < names.length; i++) {
@@ -597,7 +720,7 @@ prompt.addEventListener("keydown", (event) => {
         queue = [];
         ask.click();
     } else if (event.code == "Backspace") {
-        verifyMentionedFiles();
+        shiftStartIndexes(prevPrompt, prompt.value);
     }
 })
 

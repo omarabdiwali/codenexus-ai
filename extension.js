@@ -97,6 +97,11 @@ let ollamaModels = [];
 let ollamaNames = [];
 let customSystemPrompt = "";
 
+/**
+ * Adds file information to user question by replacing file mentions with file titles and locations.
+ * @param {string} message - The user message containing file mentions.
+ * @returns {string} - The message with file information added.
+ */
 const addFileInfoToUserQuestion = (message) => {
     let count = 0;
     const infoMessage = message.replace(fileRegEx, (match) => {
@@ -112,11 +117,22 @@ const addFileInfoToUserQuestion = (message) => {
     return infoMessage;
 }
 
+/**
+ * Converts markdown to HTML using unified processor.
+ * @param {string} md - The markdown text to convert.
+ * @returns {Promise<string>} - The converted HTML string.
+ */
 const mdToHtml = async (md) => {
     const file = await mdProcessor.process(md || '');
     return String(file);
 }
 
+/**
+ * Handles file configuration changes.
+ * @param {vscode.WorkspaceConfiguration} config - The workspace configuration.
+ * @param {CodeNexusViewProvider} provider - The view provider instance.
+ * @returns {Promise<void>}
+ */
 const fileConfigChange = async (config, provider) => {
     const included = config.get("FilesIncluded", defaultInclude);
     const excluded = config.get("FilesExcluded", defaultExclude);
@@ -124,8 +140,14 @@ const fileConfigChange = async (config, provider) => {
     provider.updateFileList();
 }
 
-const configChangeDebounce = debounce(fileConfigChange, 3000);
-
+/**
+ * Handles model and name changes for LLM providers.
+ * @param {string} change - The type of change (OpenRouter/Ollama).
+ * @param {string} type - The type of update (models/names).
+ * @param {Array} newValue - The new values.
+ * @param {CodeNexusViewProvider} provider - The view provider instance.
+ * @param {vscode.WorkspaceConfiguration} config - The workspace configuration.
+ */
 const handleModelAndNameChanges = (change, type, newValue, provider, config) => {
     const modelChange = type === "models";
     let renderChange = true;
@@ -160,6 +182,14 @@ const handleModelAndNameChanges = (change, type, newValue, provider, config) => 
     renderChange && provider.postMessage("configUpdate", payload);
 }
 
+const configChangeDebounce = debounce(fileConfigChange, 3000);
+
+/**
+ * Updates configuration based on workspace changes.
+ * @param {vscode.ConfigurationChangeEvent} event - The configuration change event.
+ * @param {CodeNexusViewProvider} provider - The view provider instance.
+ * @returns {Promise<void>}
+ */
 const updateConfig = async (event, provider) => {
     const config = vscode.workspace.getConfiguration("CodenexusAI");
     if (isChanged("OpenRouterModels", event) || isChanged("OllamaModels", event)) {
@@ -191,6 +221,12 @@ const updateConfig = async (event, provider) => {
     }
 }
 
+/**
+ * Gets or updates configuration data.
+ * @param {vscode.ConfigurationChangeEvent} [event=null] - The configuration change event.
+ * @param {CodeNexusViewProvider} [provider=null] - The view provider instance.
+ * @returns {Promise<void>}
+ */
 const getConfigData = async (event=null, provider=null) => {
     if (event && provider) {
         await updateConfig(event, provider);
@@ -221,10 +257,19 @@ const getConfigData = async (event=null, provider=null) => {
     customSystemPrompt = config.get("SystemPrompt", "").trim();
 }
 
+/**
+ * Checks if a specific configuration has changed.
+ * @param {string} value - The configuration key to check.
+ * @param {vscode.ConfigurationChangeEvent} event - The configuration change event.
+ * @returns {boolean} - True if the configuration has changed.
+ */
 const isChanged = (value, event) => {
     return event.affectsConfiguration(`CodenexusAI.${value}`)
 }
 
+/**
+ * Updates queued configuration changes.
+ */
 const updateQueuedChanges = () => {
     for (const [variant, value] of queuedChanges) {
         if (variant == "selectLLM") {
@@ -239,6 +284,12 @@ const updateQueuedChanges = () => {
     queuedChanges = [];
 }
 
+/**
+ * Generates a Python program from the LLM response stream.
+ * @param {CodeNexusViewProvider} provider - The view provider instance.
+ * @param {string} stream - The response stream text.
+ * @param {boolean} final - Whether this is the final chunk.
+ */
 const generateProgram = (provider, stream, final) => {
     const currentTime = Date.now();
     if (currentTime - lastCalled < 2000 && !final) return;
@@ -252,6 +303,14 @@ const generateProgram = (provider, stream, final) => {
     }
 }
 
+/**
+ * Sends a stream response to the webview.
+ * @param {CodeNexusViewProvider} provider - The view provider instance.
+ * @param {string} stream - The response stream text.
+ * @param {boolean} [final=false] - Whether this is the final chunk.
+ * @param {string} [key=null] - The unique key for this response.
+ * @returns {Promise<void>}
+ */
 const sendStream = async (provider, stream, final=false, key=null) => {
     const showData = stream.replaceAll(token, "");
     agentMode && generateProgram(provider, stream, final);
@@ -259,6 +318,12 @@ const sendStream = async (provider, stream, final=false, key=null) => {
     provider.postMessage("response", { text: html, value: final, key });
 };
 
+/**
+ * Adds a message to the messages array.
+ * @param {Array} messages - The messages array.
+ * @param {string} role - The role (user/assistant/system).
+ * @param {string} content - The message content.
+ */
 const addMessage = (messages, role, content) => {
     messages.push({
         role,
@@ -266,6 +331,12 @@ const addMessage = (messages, role, content) => {
     })
 }
 
+/**
+ * Generates messages for the LLM API call.
+ * @param {string} chat - The user's chat message.
+ * @param {string} mentionedCode - Any code mentioned in the message.
+ * @returns {Promise<Array>} - The array of messages.
+ */
 const generateMessages = async (chat, mentionedCode) => {
     const messages = [];
     const noFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
@@ -300,6 +371,18 @@ const generateMessages = async (chat, mentionedCode) => {
     return messages;
 }
 
+/**
+ * Sends a chat message to the LLM and handles the response.
+ * @param {CodeNexusViewProvider} provider - The view provider instance.
+ * @param {openai.OpenAI} openChat - The OpenAI client instance.
+ * @param {string} chat - The user's chat message.
+ * @param {number} index - The LLM model index.
+ * @param {number} count - The retry count.
+ * @param {string} originalQuestion - The original user question.
+ * @param {Array} models - The available models.
+ * @param {Array} names - The model names.
+ * @returns {Promise<void>}
+ */
 const sendChat = async (provider, messages, openChat, chat, index, count, originalQuestion, models, names) => {
     const startTime = performance.now();
     let sendMessage = true;
@@ -379,7 +462,9 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
 };
 
 /**
- * @param {vscode.ExtensionContext} context
+ * Activates the extension.
+ * @param {vscore.ExtensionContext} context - The extension context.
+ * @returns {Promise<void>}
  */
 async function activate(context) {
     let apiKey = await context.secrets.get('codeNexusApiKey');
@@ -479,6 +564,7 @@ class CodeNexusViewProvider {
     /**
      * @param {string} _extensionUri
      * @param {vscode.ExtensionContext} context
+     * @param {string} apiKey
      */
     constructor(_extensionUri, context, apiKey) {
         this._extensionUri = _extensionUri;
@@ -495,11 +581,21 @@ class CodeNexusViewProvider {
         })
     }
 
+    /**
+     * Sends a message to the webview.
+     * @param {string} command - The command to send.
+     * @param {Object} [payload=null] - The payload data.
+     */
     postMessage(command, payload=null) {
         if (!this._view || !this._view.webview) return;
         this._view.webview.postMessage({ command, ...payload })
     }
 
+    /**
+     * Handles incoming data to the webview.
+     * @param {string} data - The incoming data.
+     * @returns {Promise<void>}
+     */
     async handleIncomingData(data) {
         let trimmed = data.replaceAll("\n", "").replaceAll(" ", "");
         if (trimmed.length > 0) {
@@ -511,11 +607,18 @@ class CodeNexusViewProvider {
         this.postMessage('focus');
     }
 
+    /**
+     * Updates the workspace path in the webview.
+     */
     updateWorkspacePath() {
         if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0) return;
         this.postMessage('workspacePath', { value: vscode.workspace.workspaceFolders[0].uri.fsPath });
     }
 
+    /**
+     * Updates the file list in the webview.
+     * @param {boolean} [updatePath=true] - Whether to update the workspace path.
+     */
     updateFileList(updatePath=true) {
         const notOpenFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
         this.postMessage('fileTitles', { value: fileTitles });
@@ -524,16 +627,25 @@ class CodeNexusViewProvider {
         }
     }
 
+    /**
+     * Updates page values in the webview.
+     */
     updatePageValues() {
         this.postMessage('updateValues', { value: [writeToFile, agentMode, llmIndex, fileHistory.maxSize] });
         this.postMessage("promptValue", { text: promptValue, value: currentMentionedFiles });
         this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
     }
 
+    /**
+     * Shows loading spinner in the webview.
+     */
     loading() {
         this.postMessage("loading", { text: this._getSpinner() });
     }
 
+    /**
+     * Shows the webview.
+     */
     show() {
         if (this._view) {
             this._view.show();
@@ -542,6 +654,10 @@ class CodeNexusViewProvider {
         }
     }
 
+    /**
+     * Updates the HTML content of the webview.
+     * @returns {Promise<void>}
+     */
     async updateHTML() {
         if (!this._view || !this._view.webview) return;
         this._view.webview.html = await this._getHtmlForWebview();
@@ -551,6 +667,9 @@ class CodeNexusViewProvider {
         this.updateFileList(false);
     }
 
+    /**
+     * Shows in-progress state in the webview.
+     */
     inProgress() {
         if (currentlyResponding) {
             this.postMessage("chat", { text: userQuestions.at(-1) });
@@ -559,6 +678,12 @@ class CodeNexusViewProvider {
         }
     }
 
+    /**
+     * Resolves the webview view.
+     * @param {vscode.WebviewView} webviewView - The webview view.
+     * @param {vscode.CancellationToken} _token - The cancellation token.
+     * @returns {Promise<void>}
+     */
     async resolveWebviewView(webviewView, _token) {
         this._view = webviewView;
 
@@ -680,6 +805,10 @@ class CodeNexusViewProvider {
         });
     }
 
+    /**
+     * Gets the loading spinner HTML.
+     * @returns {string} - The spinner HTML.
+     */
     _getSpinner() {
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "spinner.css"));
         return /*html*/`
@@ -688,6 +817,10 @@ class CodeNexusViewProvider {
         `;
     }
 
+    /**
+     * Gets the HTML for the webview.
+     * @returns {Promise<string>} - The webview HTML.
+     */
     async _getHtmlForWebview() {
         let names = ollama ? ollamaNames : openRouterNames;
         let optionsHtml = '';
