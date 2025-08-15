@@ -514,6 +514,7 @@ async function activate(context) {
     
     vscode.commands.registerCommand('codenexus-ai.chat.focus', async (data) => {
         if (provider) {
+            if (!provider._view) await vscode.commands.executeCommand('workbench.view.extension.codenexus-ai-view');
             provider.show();
             await provider.handleIncomingData(data);
         } else {
@@ -597,6 +598,11 @@ class CodeNexusViewProvider {
      * @returns {Promise<void>}
      */
     async handleIncomingData(data) {
+        if (!data) {
+            this.postMessage('focus');
+            return;
+        }
+
         let trimmed = data.replaceAll("\n", "").replaceAll(" ", "");
         if (trimmed.length > 0) {
             textFromFile = data;
@@ -604,6 +610,7 @@ class CodeNexusViewProvider {
             await new Promise(res => setTimeout(res, 500));
             this.postMessage('content', { text: htmlText });
         }
+        
         this.postMessage('focus');
     }
 
@@ -650,7 +657,7 @@ class CodeNexusViewProvider {
         if (this._view) {
             this._view.show();
         } else {
-            vscode.window.showErrorMessage("Attempted to show view, but it's not resolved yet. Open initially before using the keyboard shortcut.");
+            vscode.commands.executeCommand('codenexus-ai.chat.focus');
         }
     }
 

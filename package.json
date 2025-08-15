@@ -6,14 +6,16 @@
     "type": "git",
     "url": "https://github.com/omarabdiwali/codenexus-ai.git"
   },
-  "version": "1.4.2",
+  "version": "1.4.3",
   "engines": {
     "vscode": "^1.97.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./extension.js",
   "contributes": {
     "keybindings": [
