@@ -445,13 +445,14 @@ const findCurrentCursorWord = (value, start) => {
  */
 const getCorrectFilename = (string) => {
     const initialMatch = string.match(regEx);
+    if (!initialMatch) return [];
+    
     const [startIndex, endIndex] = startAndEndIndexForCursorWord(prompt.value, lastCursorPosition);
-    const relativeCursorPosition = lastCursorPosition - startIndex;
     let word;
     let wordStartIndex;
-
-    if (!initialMatch) return [];
+    
     if (initialMatch.length > 1) {
+        const relativeCursorPosition = lastCursorPosition - startIndex;
         let match;
         while ((match = regEx.exec(string)) !== null) {
             const start = match.index;
@@ -505,13 +506,16 @@ const replaceCursorWord = (start, fileInfo) => {
  * Creates clickable file autocomplete suggestions.
  * @param {string} file - The file name.
  * @param {string} value - The file path.
+ * @param {number} idx - The current item index.
+ * @param {number} total - The total number items to be created.
  * @returns {HTMLDivElement} The search item element.
  */
-const createSearchItem = (file, value) => {
+const createSearchItem = (file, value, idx, total) => {
     if (!baseWorkspacePath) return;
     const item = document.createElement('div');
     const location = value.substring(baseWorkspacePath.length + 1);
 
+    item.key = idx;
     item.classList.add('search-item');
     item.innerHTML = `<b>${file}</b>: (<i>${location}</i>)`;
     item.tabIndex = "0"
@@ -530,6 +534,14 @@ const createSearchItem = (file, value) => {
         if (event.key == 'Enter') {
             event.preventDefault();
             item.click();
+        } else if (event.key == "ArrowUp") {
+            event.preventDefault();
+            const prevIdx = (idx - 1 + total) % total;
+            fileSearch.children[prevIdx].focus();
+        } else if (event.key == "ArrowDown") {
+            event.preventDefault();
+            const nextIdx = (idx + 1) % total;
+            fileSearch.children[nextIdx].focus();
         }
     })
     return item;
@@ -603,8 +615,12 @@ const showFileOptions = (string) => {
     }
 
     const orderedOptions = orderFileOptions(flatOptions);
+    const totalLength = orderedOptions.length;
+    let idx = 0;
+    
     for (const [fileName, location] of orderedOptions) {
-        const row = createSearchItem(fileName, location);
+        const row = createSearchItem(fileName, location, idx, totalLength);
+        idx += 1;
         fileSearch.appendChild(row);
     }
 
@@ -719,8 +735,13 @@ prompt.addEventListener("keydown", (event) => {
         event.preventDefault();
         queue = [];
         ask.click();
-    } else if (event.code == "Backspace") {
+    } else if (event.key == "Backspace") {
         shiftStartIndexes(prevPrompt, prompt.value);
+    } else if (event.key == "ArrowDown") {
+        if (fileSearch.childElementCount) {
+            event.preventDefault();
+            fileSearch.children[0].focus();
+        }
     }
 })
 
@@ -744,6 +765,7 @@ ask.addEventListener("click", () => {
         verifyMentionedFiles(text);
         vscode.postMessage({ command: 'chat', mentionedFiles, text, writeToFile: writeToFileCheckbox.checked, outputFile: outputFileNameInput.value });
         mentionedFiles = {};
+        fileSearch.replaceChildren();
         fileSearch.style.display = 'none';
     } else {
         vscode.postMessage({ command: "stopResponse" });
