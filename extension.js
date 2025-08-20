@@ -714,8 +714,8 @@ class CodeNexusViewProvider {
                 }
                 this.inProgress();
                 this.updateWorkspacePath();
-                this.updatePageValues();
                 this.updateFileList(false);
+                this.updatePageValues();
                 this.postMessage('focus');
             } else {
                 textFromFile = "";

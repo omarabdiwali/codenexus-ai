@@ -6,7 +6,7 @@
     "type": "git",
     "url": "https://github.com/omarabdiwali/codenexus-ai.git"
   },
-  "version": "1.5.3",
+  "version": "1.5.4",
   "engines": {
     "vscode": "^1.97.0"
   },

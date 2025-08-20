@@ -120,7 +120,7 @@ const addContextedFiles = () => {
 }
 
 /**
- * Formats user questions by highlighting '@mentioned' files.
+ * Formats user questions for the chat history by highlighting '@mentioned' files.
  * @param {string} text - The text to format.
  * @returns {string} The formatted text with highlighted mentions.
  */
@@ -212,11 +212,11 @@ const generateButtons = (codeBlock, currentTime) => {
  * @param {HTMLElement} codeBlock - The code block element.
  */
 const cancelButtons = (codeBlock) => {
-    const container = document.createElement('div');    
+    const container = document.createElement('div');
     const header = document.createElement('div');
     const closeButton = document.createElement('button');
 
-    header.classList.add('code-header');    
+    header.classList.add('code-header');
     closeButton.innerText = 'x';
     closeButton.classList.add('close-button');
 
@@ -359,11 +359,11 @@ const appendToChat = (question) => {
  * @returns {number} The start index of the difference.
  */
 const findChangeStart = (oldStr, newStr) => {
-  const minLen = Math.min(oldStr.length, newStr.length);
-  for (let i = 0; i < minLen; i++) {
-    if (oldStr[i] !== newStr[i]) return i;
-  }
-  return minLen;
+    const minLen = Math.min(oldStr.length, newStr.length);
+    for (let i = 0; i < minLen; i++) {
+        if (oldStr[i] !== newStr[i]) return i;
+    }
+    return minLen;
 }
 
 /**
@@ -396,15 +396,13 @@ const shiftStartIndexes = (oldStr, newStr) => {
 const verifyMentionedFiles = (value) => {
     let match;
     let verified = {};
-    
+
     while ((match = regEx.exec(value)) != null) {
         const key = match.index;
-        if (key in mentionedFiles) {
-            verified[key] = mentionedFiles[key];
-            continue;
-        }
         const fileName = match[0].substring(1);
-        if (fileName in fileTitlesWithLocations) {
+        if (key in mentionedFiles && mentionedFiles[key][0] == fileName) {
+            verified[key] = mentionedFiles[key];
+        } else if (fileName in fileTitlesWithLocations) {
             verified[key] = [fileName, fileTitlesWithLocations[fileName][0]];
         }
     }
@@ -446,11 +444,11 @@ const findCurrentCursorWord = (value, start) => {
 const getCorrectFilename = (string) => {
     const initialMatch = string.match(regEx);
     if (!initialMatch) return [];
-    
+
     const [startIndex, endIndex] = startAndEndIndexForCursorWord(prompt.value, lastCursorPosition);
     let word;
     let wordStartIndex;
-    
+
     if (initialMatch.length > 1) {
         const relativeCursorPosition = lastCursorPosition - startIndex;
         let match;
@@ -492,11 +490,11 @@ const replaceCursorWord = (start, fileInfo) => {
     const endIndex = startIndex + wordChange.length;
     const addWord = value.substring(0, startIndex+1) + word;
     const cursorPosition = addWord.length;
-    
+
     prompt.value = addWord + value.substring(endIndex);
     prompt.focus();
     prompt.setSelectionRange(cursorPosition, cursorPosition);
-    
+
     mentionedFiles[startIndex] = [word, location];
     fileSearch.replaceChildren();
     fileSearch.style.display = 'none';
@@ -576,7 +574,7 @@ const orderFileOptions = (options) => {
         }
 
         const nameCompare = fileNameA.localeCompare(fileNameB);
-        if (nameCompare !== 0) return nameCompare;        
+        if (nameCompare !== 0) return nameCompare;
         return locationA.localeCompare(locationB);
     });
 };
@@ -617,7 +615,7 @@ const showFileOptions = (string) => {
     const orderedOptions = orderFileOptions(flatOptions);
     const totalLength = orderedOptions.length;
     let idx = 0;
-    
+
     for (const [fileName, location] of orderedOptions) {
         const row = createSearchItem(fileName, location, idx, totalLength);
         idx += 1;
@@ -708,7 +706,6 @@ const generateLLMDropdownValues = (names, index) => {
         option.value = i;
         llmSelect.appendChild(option);
     }
-    
     llmSelect.value = index;
 }
 
@@ -735,8 +732,6 @@ prompt.addEventListener("keydown", (event) => {
         event.preventDefault();
         queue = [];
         ask.click();
-    } else if (event.key == "Backspace") {
-        shiftStartIndexes(prevPrompt, prompt.value);
     } else if (event.key == "ArrowDown") {
         if (fileSearch.childElementCount) {
             event.preventDefault();
