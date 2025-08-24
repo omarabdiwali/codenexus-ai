@@ -106,7 +106,7 @@ let customSystemPrompt = "";
 /**
  * Adds file information to user question by replacing file mentions with file titles and locations.
  * @param {string} message - The user message containing file mentions.
- * @returns {string} - The message with file information added.
+ * @returns {string} The message with file information added.
  */
 const addFileInfoToUserQuestion = (message) => {
     let count = 0;
@@ -267,7 +267,7 @@ const getConfigData = async (event=null, provider=null) => {
  * Checks if a specific configuration has changed.
  * @param {string} value - The configuration key to check.
  * @param {vscode.ConfigurationChangeEvent} event - The configuration change event.
- * @returns {boolean} - True if the configuration has changed.
+ * @returns {boolean} `true` if the configuration has changed.
  */
 const isChanged = (value, event) => {
     return event.affectsConfiguration(`CodenexusAI.${value}`)
@@ -341,7 +341,7 @@ const addMessage = (messages, role, content) => {
  * Generates messages for the LLM API call.
  * @param {string} chat - The user's chat message.
  * @param {string} mentionedCode - Any code mentioned in the message.
- * @returns {Promise<Array>} - The array of messages.
+ * @returns {Promise<Array>} The array of messages.
  */
 const generateMessages = async (chat, mentionedCode) => {
     const messages = [];
@@ -820,7 +820,7 @@ class CodeNexusViewProvider {
 
     /**
      * Gets the loading spinner HTML.
-     * @returns {string} - The spinner HTML.
+     * @returns {string} The spinner HTML.
      */
     _getSpinner() {
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "spinner.css"));
@@ -832,7 +832,7 @@ class CodeNexusViewProvider {
 
     /**
      * Gets the HTML for the webview.
-     * @returns {Promise<string>} - The webview HTML.
+     * @returns {Promise<string>} The webview HTML.
      */
     async _getHtmlForWebview() {
         let names = ollama ? ollamaNames : openRouterNames;

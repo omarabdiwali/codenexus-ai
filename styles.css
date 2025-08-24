@@ -275,7 +275,7 @@ pre code.hljs {
     scrollbar-width: none;
     align-items: center;
 }
-#file-mention {
+.file-mention {
     display: flex;
     flex-direction: row;
     gap: 0px;
@@ -285,9 +285,19 @@ pre code.hljs {
     border-radius: var(--border-radius-size);
     align-items: center;
 }
-#file-mention:hover {
+.file-mention:hover {
     background-color: rgb(0, 33, 43);
     border: 2px solid var(--vscode-input-background);
+    border-radius: var(--border-radius-size);
+}
+.temp-mention {
+    display: flex;
+    flex-direction: row;
+    gap: 0px;
+    background-color: transparent;
+    border: 2px solid var(--vscode-input-background);
+    padding: 6px;
+    padding-top: 4px;
     border-radius: var(--border-radius-size);
 }
 #file-number {
@@ -298,6 +308,7 @@ pre code.hljs {
     border: 2px solid var(--vscode-input-background);
     border-radius: 5px;
     cursor: default;
+    order: 1;
 }
 #mode-select {
     margin-bottom: 10px;
@@ -338,4 +349,7 @@ pre code.hljs {
 }
 .checkbox-button-input:not(:checked) + .checkbox-button-label .label-text {
     display: inline-block;
+}
+#context-files > * {
+    display: none;
 }

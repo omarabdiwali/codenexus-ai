@@ -28,12 +28,58 @@ let alreadyMatched = {};
 let autocompleteUsed = false;
 
 /**
+ * An LRUCache that is used for handling the number of files for context.
+ */
+class LRUCache {
+    constructor(capacity) {
+        this.cache = new Map();
+        this.capacity = capacity;
+        this.maxSize = capacity;
+    }
+    put(key, value) {
+        this.cache.delete(key);
+        if (this.cache.size === this.capacity) {
+            this.cache.delete(this.cache.keys().next().value);
+            this.cache.set(key, value);
+        } else {
+            this.cache.set(key, value);
+        }
+    }
+    delete(key) {
+        this.cache.delete(key);
+        this.capacity += 1;
+    }
+    changeSize(size) {
+        if (this.cache.size <= size) {
+            this.capacity = size - this.cache.size;
+        } else {
+            const overflow = this.cache.size - size;
+            for (let i = 0; i < overflow; i++) {
+                this.cache.delete(this.cache.keys().next().value)
+            }
+            this.capacity = 0;
+        }
+        this.maxSize = size;
+    }
+    has(key) {
+        return this.cache.has(key);
+    }
+    clear() {
+        this.cache.clear();
+        this.capacity = this.maxSize;
+    }
+}
+
+const contextFileElements = new LRUCache(maxFiles);
+
+/**
  * Creates a div element showing context file count (current/total).
  * @param {number} fileCount - The current number of context files.
  * @returns {HTMLDivElement} The file count element.
  */
 const createNumberOfFiles = (fileCount) => {
     const files = document.createElement('div');
+    fileCount = Math.min(maxFiles, fileCount);
     files.id = 'file-number'
     files.innerText = `${fileCount}/${maxFiles}`
     if (fileCount == maxFiles) {
@@ -43,13 +89,56 @@ const createNumberOfFiles = (fileCount) => {
 }
 
 /**
+ * Handles the display of the `contextFiles` element, and the file count.
+ */
+const showContextFiles = () => {
+    const current = contextFiles.style.display;
+    const numberCount = contextFiles.children.namedItem("file-number")
+    const children = numberCount ? contextFiles.childElementCount - 1 : contextFiles.childElementCount;
+
+    if (current == "flex") {
+        if (children == 0) {
+            contextFiles.style.display = 'none';
+        }
+    } else {
+        if (children > 0) {
+            contextFiles.style.display = 'flex';
+        }
+    }
+
+    contextFiles.style.display == 'flex' && replaceContextFileCount(children);
+    showFileMentions();
+}
+
+/**
+ * Shows the last `maxFiles` number of mentioned files, and adapts when `maxFiles` is updated.
+ */
+const showFileMentions = () => {
+    const children = Array.from(contextFiles.children);
+    for (const child of children) {
+        if (child.id == "file-number") {
+            child.style.display = 'flex';
+        } else if (contextFileElements.has(child.dataset.unique)) {
+            child.style.display = 'flex';
+        } else {
+            child.style.display = 'none';
+        }
+    }
+}
+
+/**
  * Updates displayed context file count in the UI.
  * @param {number} size - The new file count to display.
  */
 const replaceContextFileCount = (size) => {
     const newCount = createNumberOfFiles(size);
-    const oldCount = contextFiles.lastElementChild;
-    contextFiles.replaceChild(newCount, oldCount);
+    const oldCount = contextFiles.querySelector("#file-number");
+    if (oldCount) {
+        contextFiles.removeChild(oldCount);
+        contextFiles.appendChild(newCount);
+    } else {
+        contextFiles.appendChild(newCount);
+    }
 }
 
 /**
@@ -59,26 +148,87 @@ const replaceContextFileCount = (size) => {
 const removeDeletedContext = (location) => {
     const index = contextedFilesStorage.findIndex((val) => val[0] == location);
     contextedFilesStorage.splice(index, 1);
+    contextFileElements.delete(location);
     vscode.postMessage({ command: 'fileContext', key: location });
-    if (contextedFilesStorage.length == 0) contextFiles.style.display = 'none';
-    replaceContextFileCount(contextedFilesStorage.length);
+    showContextFiles();
+}
+
+/**
+ * Removes all mentioned files children from `contextFiles` element.
+ */
+const removeMentionedFiles = () => {
+    const children = contextFiles.querySelectorAll(`.temp-mention`);
+    children.forEach((child) => {
+        contextFiles.removeChild(child);
+    })
+}
+
+/**
+ * Checks if a file is already being shown, from either the `contextedFileStorage`, or within the `contextFiles` element.
+ * @param {string} className - The className to target within `contextFiles`.
+ * @param {string} location - The unique identifier for the element: the location of the file.
+ * @returns {boolean} `true` if the element exists, `false` otherwise.
+ */
+const alreadyShowingFiles = (className, location) => {
+    if (className != 'temp-mention') return false;
+    const children = contextFiles.querySelectorAll(`.${className}`);
+    const child = Array.from(children).some((val) => val.dataset.unique == location);
+    const alreadySaved = contextedFilesStorage.findIndex((val) => val[0] == location);
+    return (child || alreadySaved != -1) ? true : false;
+}
+
+/**
+ * Updates `mentionedFiles` using the most recent `prompt` value, keeping it up-to-date.
+ */
+const updateMentionedFiles = () => {
+    const value = prompt.value;
+    let match;
+    let verified = {};
+    let totalMatches = 0;
+
+    removeMentionedFiles();
+    contextFileElements.clear();
+    for (const value of contextedFilesStorage) {
+        contextFileElements.put(value[0], value[1]);
+    }
+
+    while ((match = regEx.exec(value)) != null) {
+        const key = match.index;
+        const fileName = match[0].substring(1);
+        if (key in mentionedFiles && mentionedFiles[key][0] == fileName) {
+            const location = mentionedFiles[key][1];
+            verified[key] = mentionedFiles[key];
+            createContextedFileElement(fileName, location, 'temp-mention');
+            contextFileElements.put(location, fileName);
+        } else if (fileName in fileTitlesWithLocations) {
+            const location = fileTitlesWithLocations[fileName][0];
+            createContextedFileElement(fileName, location, 'temp-mention');
+            verified[key] = [fileName, location];
+            contextFileElements.put(location, fileName);
+        }
+    }
+
+    showContextFiles();
+    mentionedFiles = verified;
 }
 
 /**
  * Creates UI element for a context file with remove button.
  * @param {string} fileName - The name of the file.
  * @param {string} location - The full path of the file.
- * @returns {boolean} True if the element was created successfully, false otherwise.
+ * @param {string} [className='file-mention'] - The className that the created element should have.
+ * @returns {boolean} `true` if the element was created successfully, `false` otherwise.
  */
-const createContextedFileElement = (fileName, location) => {
-    if (!baseWorkspacePath) return false;
+const createContextedFileElement = (fileName, location, className='file-mention') => {
+    if (!baseWorkspacePath || alreadyShowingFiles(className, location)) return false;
 
     const relativeLocation = location.substring(baseWorkspacePath.length + 1);
     const main = document.createElement('div');
     const name = document.createElement('div');
     const cancel = document.createElement('button');
 
-    main.id = 'file-mention';
+    main.classList.add(className);
+    main.dataset.unique = location;
     name.id = 'name';
     cancel.classList.add('close-button');
 
@@ -94,7 +244,7 @@ const createContextedFileElement = (fileName, location) => {
     })
 
     main.appendChild(name);
-    main.appendChild(cancel);
+    className == 'file-mention' && main.appendChild(cancel);
     contextFiles.appendChild(main);
     return true;
 }
@@ -105,18 +255,10 @@ const createContextedFileElement = (fileName, location) => {
 const addContextedFiles = () => {
     contextFiles.replaceChildren();
     let fileCount = 0;
-
     for (const [location, fileName] of contextedFilesStorage) {
         if (createContextedFileElement(fileName, location)) fileCount += 1;
     }
-
-    if (fileCount == 0) {
-        contextFiles.style.display = 'none';
-    } else {
-        const files = createNumberOfFiles(fileCount);
-        contextFiles.appendChild(files);
-        contextFiles.style.display = 'flex';
-    }
+    showContextFiles();
 }
 
 /**
@@ -353,43 +495,6 @@ const appendToChat = (question) => {
 }
 
 /**
- * Finds start index of difference between two strings.
- * @param {string} oldStr - The old string.
- * @param {string} newStr - The new string.
- * @returns {number} The start index of the difference.
- */
-const findChangeStart = (oldStr, newStr) => {
-    const minLen = Math.min(oldStr.length, newStr.length);
-    for (let i = 0; i < minLen; i++) {
-        if (oldStr[i] !== newStr[i]) return i;
-    }
-    return minLen;
-}
-
-/**
- * Adjusts file mention indexes after prompt changes, and removes them if necessary.
- * @param {string} oldStr - The old string.
- * @param {string} newStr - The new string.
- * @returns {{ [startIndex: number]: [filename: string, fileLocation: string] }} The updated mentioned files object.
- */
-const shiftStartIndexes = (oldStr, newStr) => {
-    const diffStart = findChangeStart(oldStr, newStr);
-    const diffLength = newStr.length - oldStr.length;
-    let newMentionedFiles = {};
-
-    for (const [key, value] of Object.entries(mentionedFiles)) {
-        const oldIndex = parseInt(key);
-        let newIndex = oldIndex;
-        if (oldIndex >= diffStart) newIndex = oldIndex + diffLength;
-        if (newIndex < 0) continue;
-        newMentionedFiles[newIndex] = value;
-    }
-
-    prevPrompt = newStr;
-    return newMentionedFiles;
-}
-
-/**
  * Verifies '@mentioned' files exist in workspace before sending.
  * @param {string} value - The prompt value to check.
  */
@@ -498,6 +603,7 @@ const replaceCursorWord = (start, fileInfo) => {
     mentionedFiles[startIndex] = [word, location];
     fileSearch.replaceChildren();
     fileSearch.style.display = 'none';
+    updateMentionedFiles();
 }
 
 /**
@@ -682,7 +788,7 @@ const escapeString = (str) => {
  * Compares code blocks with high similarity threshold.
  * @param {string} codeBlock - The code block to compare.
  * @param {string} value - The value to compare against.
- * @returns {boolean} True if the code blocks are similar, false otherwise.
+ * @returns {boolean} `true` if the code blocks are similar, `false` otherwise.
  */
 const comapreCodeBlock = (codeBlock, value) => {
     const normCode = escapeString(normalizeString(codeBlock));
@@ -742,7 +848,7 @@ prompt.addEventListener("keydown", (event) => {
 
 prompt.addEventListener("input", (event) => {
     autocompleteUsed = false;
-    mentionedFiles = shiftStartIndexes(prevPrompt, prompt.value);
+    updateMentionedFiles();
     vscode.postMessage({ command: 'updatePrompt', value: prompt.value, files: mentionedFiles });
 });
 
@@ -825,8 +931,14 @@ window.addEventListener("message", (e) => {
         llmMode.value = `${agent}`;
         llmSelect.value = index;
         maxFiles = fileSize;
+        contextFileElements.changeSize(maxFiles);
+        prompt.placeholder = `Type your message here, with @file.ext to mention files (max ${maxFiles}), and using tab to select the correct one...`;
     } else if (command == 'configUpdate') {
         if (key == "models") generateLLMDropdownValues(value.names, value.index);
-        else if (key == "fileSize") maxFiles = value;
+        else if (key == "fileSize") {
+            maxFiles = value;
+            contextFileElements.changeSize(maxFiles);
+            prompt.placeholder = `Type your message here, with @file.ext to mention files (max ${maxFiles}), and using tab to select the correct one...`;
+        }
     }
 });

@@ -63,7 +63,6 @@ const debounce = (func, wait) => {
  * Writes content to a file in the workspace.
  * @param {string} content - The content to write to the file.
  * @param {string} filename - The name of the file to write to.
- * @returns {void}
  */
 const sendToFile = (content, filename) => {
     try {
@@ -125,7 +124,7 @@ const getFileNames = (allFiles) => {
 /**
  * Reads text from a file.
  * @param {string} path - The path of the file to read.
- * @returns {Promise<string|null>} A promise that resolves to the file content or null if an error occurs.
+ * @returns {Promise<string|null>} A promise that resolves to the file content or `null` if an error occurs.
  */
 const getTextFromFile = async (path) => {
     const uri = vscode.Uri.file(path);
@@ -153,7 +152,7 @@ const getNonce = () => {
 /**
  * Checks the generated code for dangerous patterns, and alerts the user.
  * @param {string} code - The code to check for dangerous patterns.
- * @returns {false | PromiseLike<boolean>} A promise that resolves to true if the code is dangerous, false otherwise.
+ * @returns {false | PromiseLike<boolean>} A promise that resolves to `true` if the code is dangerous, `false` otherwise.
  */
 const checkCodeForDangerousPatterns = (code) => {
     const dangerousPatterns = [
@@ -274,7 +273,7 @@ class LRUCache {
     /**
      * Gets a value from the cache.
      * @param {string} key - The key to get.
-     * @returns {-1 | string} The value if found, -1 otherwise.
+     * @returns {-1 | string} The value if found, `-1` otherwise.
      */
     get(key) {
         if (!this.cache.has(key)) return -1;
@@ -288,7 +287,6 @@ class LRUCache {
      * Puts a key-value pair into the cache.
      * @param {string} key - The key to put.
      * @param {string} value - The value to put.
-     * @returns {void}
      */
     put(key, value) {
         this.cache.delete(key);
@@ -303,7 +301,6 @@ class LRUCache {
     /**
      * Deletes a key from the cache.
      * @param {string} key - The key to delete.
-     * @returns {void}
      */
     delete(key) {
         this.cache.delete(key);
@@ -313,7 +310,6 @@ class LRUCache {
     /**
      * Handles changing the size of the cache.
      * @param {number} size - The new size of the cache.
-     * @returns {void}
      */
     changeSize(size) {
         if (this.size() <= size) {
@@ -339,7 +335,7 @@ class LRUCache {
     /**
      * Checks if the cache has a key.
      * @param {string} key - The key to check.
-     * @returns {boolean} True if the cache has the key, false otherwise.
+     * @returns {boolean} `true` if the cache has the key, `false` otherwise.
      */
     has(key) {
         return this.cache.has(key);
