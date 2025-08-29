@@ -25,10 +25,10 @@ blockquote {
 }
 .question, .response {
     padding: 5px;
-    margin-bottom: 2px;
 }
 .question {
     background-color: var(--vscode-editor-selectionBackground);
+    margin-bottom: 2px;
 }
 .delete-entry {
     position: absolute;
@@ -352,4 +352,16 @@ pre code.hljs {
 }
 #context-files > * {
     display: none;
+}
+.response-copy {
+    background-color: transparent;
+    color: rgb(77, 124, 138);
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    display: block;
+    margin-left: auto;
+}
+.response-copy:hover {
+    color: rgb(115, 178, 198);
 }

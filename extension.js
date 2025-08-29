@@ -814,6 +814,10 @@ class CodeNexusViewProvider {
                 this.postMessage('fileTitles', { value: fileTitles });
             } else if (message.command === 'updateApiKey') {
                 await vscode.commands.executeCommand('codenexus-ai.changeApiKey');
+            } else if (message.command === 'copyResponse') {
+                const chatEntry = questionsAndResponses.find((val) => val.key == message.key);
+                if (chatEntry === undefined) return;
+                await vscode.env.clipboard.writeText(chatEntry.response);
             }
         });
     }

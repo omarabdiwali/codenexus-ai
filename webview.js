@@ -184,12 +184,11 @@ const updateMentionedFiles = () => {
     const value = prompt.value;
     let match;
     let verified = {};
-    let totalMatches = 0;
 
     removeMentionedFiles();
     contextFileElements.clear();
-    for (const value of contextedFilesStorage) {
-        contextFileElements.put(value[0], value[1]);
+    for (const [location, filename] of contextedFilesStorage) {
+        contextFileElements.put(location, filename);
     }
 
     while ((match = regEx.exec(value)) != null) {
@@ -313,6 +312,47 @@ const generateCopyButton = (text) => {
 }
 
 /**
+ * Creates a 'Copy' button for the chat entry, which will copy the response in Markdown format.
+ * @param {HTMLElement} element - The element to assign the copy button top.
+ * @param {string} key - The key identifier for the response element.
+ */
+const generateResponseCopyButton = (element, key) => {
+    const copyButton = document.createElement('button');
+    copyButton.innerHTML = `<i class="fa-solid fa-copy"></i>`;
+    copyButton.classList.add('response-copy');
+    copyButton.title = 'Copy'
+
+    copyButton.onclick = () => {
+        vscode.postMessage({ command: 'copyResponse', key });
+        copyButton.innerHTML = '<i class="fa-solid fa-check"></i>';
+        copyButton.title = 'Copied!'
+        setTimeout(() => {
+            copyButton.innerHTML = `<i class="fa-solid fa-copy"></i>`
+            copyButton.title = 'Copy';
+        }, 2000);
+    }
+
+    element.appendChild(copyButton);
+}
+
+/**
+ * Generates a 'Delete' button for a chat entry.
+ * @param {HTMLElement} chatEntry - The chat entry element.
+ * @param {string} key - The key identifier for the chat entry.
+ */
+const generateCloseButton = (chatEntry, key) => {
+    const button = document.createElement('button');
+    button.innerText = 'X';
+    button.classList.add('delete-entry');
+    button.onclick = () => {
+        vscode.postMessage({ command: "deleteEntry", key });
+        chatEntry.remove();
+    }
+
+    chatEntry.appendChild(button);
+}
+
+/**
  * Adds action buttons (run/copy) to code blocks in responses.
  * @param {HTMLElement} codeBlock - The code block element.
  * @param {number} currentTime - The current time for matching purposes.
@@ -415,33 +455,18 @@ const highlightAllCodeBlocks = () => {
 };
 
 /**
- * Generates a delete button for a chat entry.
- * @param {HTMLElement} chatEntry - The chat entry element.
- * @param {string} key - The key identifier for the chat entry.
+ * Adds the needed buttons to all existing chat entries.
  */
-const generateCloseButton = (chatEntry, key) => {
-    const button = document.createElement('button');
-    button.innerText = 'X';
-    button.classList.add('delete-entry');
-    button.onclick = () => {
-        vscode.postMessage({ command: "deleteEntry", key });
-        chatEntry.remove();
-    }
-
-    chatEntry.appendChild(button);
-}
-
-/**
- * Adds delete buttons to all existing chat entries.
- */
-const addCloseButtons = () => {
+const addButtons = () => {
     document.querySelectorAll(".chat-entry").forEach((element) => {
+        const responseElement = element.querySelector('.response');
         generateCloseButton(element, element.id);
+        responseElement && generateResponseCopyButton(responseElement, element.id);
     })
 }
 
 highlightAllCodeBlocks();
-addCloseButtons();
+addButtons();
 
 llmSelect.addEventListener('change', () => {
     const selectedIndex = llmSelect.value;
@@ -881,6 +906,7 @@ window.addEventListener("message", (e) => {
         if (value) {
             highlightNewCodeBlocks(lastMatching + 5000);
             generateCloseButton(responseArea.lastElementChild, key);
+            generateResponseCopyButton(responseArea.lastElementChild, key)
         } else highlightNewCodeBlocks();
     } else if (command == "loading") {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
