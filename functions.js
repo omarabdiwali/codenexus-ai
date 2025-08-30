@@ -137,13 +137,14 @@ const getTextFromFile = async (path) => {
 };
 
 /**
- * Generates a random nonce (32-character string).
- * @returns {string} A random 32-character string.
+ * Generates a random string of given length.
+ * @param {number} len - The length of the generated string.
+ * @returns {string} A random string.
  */
-const getNonce = () => {
+const getRandomString = (len) => {
     let text = '';
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < len; i++) {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
     return text;
@@ -267,7 +268,6 @@ class LRUCache {
     constructor(capacity) {
         this.cache = new Map();
         this.capacity = capacity;
-        this.maxSize = capacity;
     }
 
     /**
@@ -304,7 +304,6 @@ class LRUCache {
      */
     delete(key) {
         this.cache.delete(key);
-        this.capacity += 1;
     }
 
     /**
@@ -312,16 +311,13 @@ class LRUCache {
      * @param {number} size - The new size of the cache.
      */
     changeSize(size) {
-        if (this.size() <= size) {
-            this.capacity = size - this.size();
-        } else {
+        if (this.size() > size) {
             const overflow = this.size() - size;
             for (let i = 0; i < overflow; i++) {
                 this.cache.delete(this.cache.keys().next().value)
             }
-            this.capacity = 0;
         }
-        this.maxSize = size;
+        this.capacity = size;
     }
 
     /**
@@ -370,7 +366,7 @@ module.exports = {
     replaceFileMentions,
     highlightFilenameMentions,
     getFileNames,
-    getNonce,
+    getRandomString,
     getAllRunnablePrograms,
     runPythonFile,
     LRUCache

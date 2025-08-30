@@ -22,7 +22,7 @@ const {
     sendToFile,
     replaceFileMentions,
     highlightFilenameMentions,
-    getNonce,
+    getRandomString,
     LRUCache,
     runPythonFile,
     getAllRunnablePrograms,
@@ -644,7 +644,7 @@ class CodeNexusViewProvider {
      * Updates page values in the webview.
      */
     updatePageValues() {
-        this.postMessage('updateValues', { value: [writeToFile, agentMode, llmIndex, fileHistory.maxSize] });
+        this.postMessage('updateValues', { value: [writeToFile, agentMode, llmIndex, fileHistory.capacity] });
         this.postMessage("promptValue", { text: promptValue, value: currentMentionedFiles });
         this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
     }
@@ -708,7 +708,7 @@ class CodeNexusViewProvider {
         };
 
         webviewView.webview.html = await this._getHtmlForWebview();
-        this.postMessage("configUpdate", { key: 'fileSize', value: fileHistory.maxSize });
+        this.postMessage("configUpdate", { key: 'fileSize', value: fileHistory.capacity });
         this.postMessage('focus');
         this.updateFileList();
 
@@ -858,9 +858,9 @@ class CodeNexusViewProvider {
 
         const jsFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "webview.js"));
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "styles.css"));
-        const nonce = getNonce();
+        const nonce = getRandomString(32);
         const disableOutput = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
-        const placeholder = `Type your message here, with @file.ext to mention files (max ${fileHistory.maxSize}), and using tab to select the correct one...`
+        const placeholder = `Type your message here, with @file.ext to mention files (max ${fileHistory.capacity}), and using tab to select the correct one...`
 
         const llmModes = ["Chat"];
         !disableOutput && llmModes.push("Agent");
