@@ -267,7 +267,6 @@ class LRUCache {
     constructor(capacity) {
         this.cache = new Map();
         this.capacity = capacity;
-        this.maxSize = capacity;
     }
 
     /**
@@ -304,7 +303,6 @@ class LRUCache {
      */
     delete(key) {
         this.cache.delete(key);
-        this.capacity += 1;
     }
 
     /**
@@ -312,16 +310,13 @@ class LRUCache {
      * @param {number} size - The new size of the cache.
      */
     changeSize(size) {
-        if (this.size() <= size) {
-            this.capacity = size - this.size();
-        } else {
+        if (this.size() > size) {
             const overflow = this.size() - size;
             for (let i = 0; i < overflow; i++) {
                 this.cache.delete(this.cache.keys().next().value)
             }
-            this.capacity = 0;
         }
-        this.maxSize = size;
+        this.capacity = size;
     }
 
     /**
