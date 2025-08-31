@@ -18,7 +18,6 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
   - LRU cached file context (3-file memory).
   - Highlight-to-chat integration (Ctrl+K/Cmd+K).
 - **Agent Mode**: 
-  - Safe code execution environment.
   - Python program generation/validation.
   - Real-time code execution results.
 - **Conversation Management**:
@@ -36,6 +35,10 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 - [Ollama](https://ollama.com) (optional, needed if you want access to local LLMs).
 
 ### Installation
+Get the [latest release](https://github.com/omarabdiwali/codenexus-ai/releases/latest) and follow the installation process listed there.
+
+**OR**
+
 ```bash
 git clone https://github.com/omarabdiwali/codenexus-ai.git
 npm install -g @vscode/vsce
@@ -101,9 +104,8 @@ Add local AI capabilities using Ollama's lightweight framework:
 | `spinner.css`    | Loading animation.                        |
 
 ## 🛡️ Safety Features
-- Code execution sandboxing.
 - Dangerous pattern detection in generated code.
-- Automatic Python environment cleanup.
+- Allows the user to decide whether or not to run the generated code.
 
 ## 🤝 Contributing
 We welcome contributions! Please follow our guidelines:
