@@ -221,7 +221,6 @@ pre code.hljs {
 }
 .options-container {
     display: flex;
-    gap: 5px;
     align-items: center;
 }
 .button-styling {
@@ -325,7 +324,7 @@ pre code.hljs {
     color: rgb(77, 124, 138);
     border: none;
     margin-bottom: 10px;
-    font-size: 18px;
+    font-size: 15px;
     cursor: pointer;
 }
 .options:hover {

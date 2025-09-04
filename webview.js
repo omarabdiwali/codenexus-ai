@@ -13,6 +13,7 @@ const llmMode = document.getElementById('mode-select')
 const settings = document.getElementById('open-settings');
 const refreshFiles = document.getElementById('refresh-files');
 const updateKey = document.getElementById('api-key');
+const openMediaFolder = document.getElementById('media-folder');
 const regEx = new RegExp(/\B@(?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_-]+)/g);
 
 let maxFiles = 3;
@@ -849,6 +850,10 @@ refreshFiles.addEventListener("click", () => {
 
 updateKey.addEventListener("click", () => {
     vscode.postMessage({ command: 'updateApiKey' });
+})
+
+openMediaFolder.addEventListener("click", () => {
+    vscode.postMessage({ command: 'mediaFolder' });
 })
 
 prompt.addEventListener("keydown", (event) => {

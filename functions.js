@@ -10,7 +10,7 @@ const fileRegEx = new RegExp(/\B@(?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_-]+)/g);
  * @param {string} [fileType='md'] - The file extension.
  * @returns {string} The full file path.
  */
-const getFilePath = (filename, fileType='md') => {
+const getFilePath = (filename, fileType) => {
     const filePath = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, `${filename}.${fileType}`);
     return filePath.at(0) == '/' || filePath.at(0) == '\\' ? filePath.slice(1) : filePath;
 }
@@ -69,7 +69,7 @@ const sendToFile = (content, filename) => {
         if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0) {
             throw new Error('No workspace folder is open.');
         }
-        const filePath = getFilePath(filename);
+        const filePath = getFilePath(filename, "md");
         fs.writeFileSync(filePath, content, { flag: "a" });
     } catch (err) {
         console.error(err);

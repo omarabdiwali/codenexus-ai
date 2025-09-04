@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const openai = require('openai');
+const fs = require('fs');
 const { performance } = require("perf_hooks");
 
 const { unified } = require('unified');
@@ -76,7 +77,7 @@ You are an AI Coding Agent assistant. When the user asks a question involving ch
 - Be syntactically correct and executable as a Python file.
 - Use only Python.
 - Use necessary imports and no unnecessary ones. If a package is needed but not installed, generate a Python function within the code to install it.
-- When modifying or creating files, use the environment variable 'BASE_WORKSPACE_PATH' for file paths to ensure correct directory placement.
+- When modifying or creating files, use the environment variable 'BASE_WORKSPACE_PATH' for file paths to ensure correct directory placement, and always default to the current directory, or '.'.
 - If multiple steps or programs are needed, split them logically into multiple Python programs, each enclosed separately within ${token}.
 - When needing to execute commands, use shell execution via Python.
 - Provide some explanation (no more than four sentences) about the code after generating it.
@@ -326,15 +327,39 @@ const sendStream = async (provider, stream, final=false, key=null) => {
 
 /**
  * Adds a message to the messages array.
- * @param {Array} messages - The messages array.
+ * @param {Array} messages - The messages array, showing the conversation.
  * @param {string} role - The role (user/assistant/system).
- * @param {string} content - The message content.
+ * @param {string} text - The message text.
  */
-const addMessage = (messages, role, content) => {
+const addMessage = (messages, role, text) => {
     messages.push({
         role,
-        content
+        content: [{ type: "text", text }]
     })
+}
+
+/**
+ * Adds the image data to the previous message element.
+ * @param {Array} messages - The messages array, showing the conversation.
+ * @param {string} imageData - The image data in base64 format.
+ * @param {string} imageType - The file type of the image.
+ * @param {string} match - The markdown image string.
+ */
+const addImageToMessage = (messages, imageData, imageType, match) => {
+    const lastMessage = messages.at(-1);
+    const imageObj = {
+        type: "image_url",
+        imageUrl: {
+            url: `data:image/${imageType};base64,${imageData}`,
+            detail: "low"
+        }
+    }
+    
+    let messageText = lastMessage.content[0].text;
+    messageText = messageText.replace(match, "");
+    lastMessage.content[0].text = messageText;
+    lastMessage.content.push(imageObj);
+    messages[messages.length - 1] = lastMessage;
 }
 
 /**
@@ -371,6 +396,7 @@ const generateMessages = async (chat, mentionedCode) => {
         if (!agentMode && mode != agentMode) continue;
         addMessage(messages, 'user', question);
         addMessage(messages, 'assistant', systemResponse);
+        parseResponseForImages(systemResponse, messages);
     }
 
     addMessage(messages, 'user', completeMessage);
@@ -378,8 +404,72 @@ const generateMessages = async (chat, mentionedCode) => {
 }
 
 /**
+ * Verifies that a directory exists, and if it doesn't, creates it.
+ * @param {string} path - The path of the directory.
+ */
+const verifyDirectoryExists = (path) => {
+    if (!fs.existsSync(path)) {
+        try {
+            fs.mkdirSync(path);
+        } catch (e) {
+            console.log(e);
+        }
+    }
+}
+
+/**
+ * Translate an image from a data: url to a vscode.Uri, and save it to a file.
+ * @param {CodeNexusViewProvider} provider - The view provider instance.
+ * @param {string} imageUrl - The data: url string for the image.
+ * @returns {vscode.Uri}
+ */
+const translateImage = (provider, imageUrl) => {
+    const slashIndex = imageUrl.indexOf('/');
+    const semiColonIndex = imageUrl.indexOf(";");
+    
+    const imageType = imageUrl.substring(slashIndex+1, semiColonIndex);
+    const imageBase64 = imageUrl.split(',')[1];
+    const imageBuffer = Buffer.from(imageBase64, "base64");
+    let filepath;
+
+    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+        filepath = getFilePath(getRandomString(6), imageType);
+    } else {
+        const mediaDirectory = vscode.Uri.joinPath(provider._extensionUri, "media");
+        verifyDirectoryExists(mediaDirectory.fsPath);
+        filepath = vscode.Uri.joinPath(mediaDirectory, `${getRandomString(6)}.${imageType}`).fsPath;
+    }
+
+    fs.writeFileSync(filepath, imageBuffer);
+    const imageUri = vscode.Uri.file(filepath);
+    const imageWebviewUri = provider._view.webview.asWebviewUri(imageUri);
+    return imageWebviewUri;
+}
+
+/**
+ * Parses the response for images, and adds them to the request.
+ * @param {string} response - The response message.
+ * @param {Array} messages - The messages array, showing the conversation.
+ */
+const parseResponseForImages = (response, messages) => {
+    const imgRegEx = new RegExp("!\\[([^\\]]*)\\]\\(([^)]+)\\)", "g");
+    let match;
+    while ((match = imgRegEx.exec(response)) !== null) {
+        const imageUri = match[2];
+        const uri = vscode.Uri.parse(imageUri);
+        try {
+            const imageBase64 = fs.readFileSync(uri.fsPath, "base64");
+            const lastPeriodIndex = uri.fsPath.lastIndexOf('.');
+            const imageType = lastPeriodIndex != -1 ? uri.fsPath.substring(lastPeriodIndex+1).toLowerCase() : 'png';
+            addImageToMessage(messages, imageBase64, imageType, match[0]);
+        } catch (e) { }
+    }
+}
+
+/**
  * Sends a chat message to the LLM and handles the response.
  * @param {CodeNexusViewProvider} provider - The view provider instance.
+ * @param {Array} messages - The messages array, showing the conversation.
  * @param {openai.OpenAI} openChat - The OpenAI client instance.
  * @param {string} chat - The user's chat message.
  * @param {number} index - The LLM model index.
@@ -405,7 +495,14 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
             if (sendMessage) provider.postMessage('cancelView', { value: true });
             sendMessage = false;
             if (!continueResponse) break;
-            const val = chunk.choices[0]?.delta?.content || "";
+            let val = chunk.choices[0]?.delta?.content || "";
+            if (chunk.choices[0]?.delta?.images) {
+                for (const image of chunk.choices[0].delta.images) {
+                    const imageUrl = image.image_url.url;
+                    const imageWebiewUri = translateImage(provider, imageUrl);
+                    val += `\n\n![Image](${imageWebiewUri})\n\n`;
+                }
+            }
             currentResponse += val;
             if (val.length > 0) writeToFile ? sendToFile(val, outputFileName) : await sendStream(provider, currentResponse);
         }
@@ -421,7 +518,7 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
         const key = crypto.randomUUID();
 
         if (writeToFile) {
-            const pathToFile = getFilePath(outputFileName);
+            const pathToFile = getFilePath(outputFileName, "md");
             const webviewResponse = `The response to your question has been completed at:\n\n **${pathToFile}**`;
             sendToFile(`\n\n**${runTime}**\n\n`, outputFileName);
             const html = await mdToHtml(webviewResponse);
@@ -445,7 +542,7 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
             let totalTime = `${(performance.now() - startTime) / 1000}`;
             totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
             const runTime = `Call to ${names[index]} took ${totalTime} seconds.`;
-            writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : await sendStream(provider, runtime);
+            writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : await sendStream(provider, runTime);
             continueResponse = true;
             return;
         }
@@ -692,6 +789,27 @@ class CodeNexusViewProvider {
     }
 
     /**
+     * Gets the local resource roots, and resolves any missing paths.
+     * @returns {Array<vscode.Uri>}
+     */
+    getLocalResourceRoots() {
+        const resourceRoots = [];
+        const mediaPath = vscode.Uri.joinPath(this._extensionUri, "media").fsPath;
+        if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+            resourceRoots.push(vscode.Uri.file(vscode.workspace.workspaceFolders[0].uri.fsPath));
+        }
+        
+        try {
+            verifyDirectoryExists(mediaPath);
+            resourceRoots.push(vscode.Uri.file(mediaPath));
+        } catch (e) {
+            console.log(e);
+        }
+        
+        return resourceRoots;
+    }
+
+    /**
      * Resolves the webview view.
      * @param {vscode.WebviewView} webviewView - The webview view.
      * @param {vscode.CancellationToken} _token - The cancellation token.
@@ -703,7 +821,8 @@ class CodeNexusViewProvider {
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [
-                this._extensionUri
+                this._extensionUri,
+                ...this.getLocalResourceRoots()
             ]
         };
 
@@ -818,6 +937,10 @@ class CodeNexusViewProvider {
                 const chatEntry = questionsAndResponses.find((val) => val.key == message.key);
                 if (chatEntry === undefined) return;
                 await vscode.env.clipboard.writeText(chatEntry.response);
+            } else if (message.command === 'mediaFolder') {
+                const mediaDirectory = vscode.Uri.joinPath(this._extensionUri, "media");
+                verifyDirectoryExists(mediaDirectory.fsPath);
+                await vscode.env.openExternal(mediaDirectory);
             }
         });
     }
@@ -912,7 +1035,8 @@ class CodeNexusViewProvider {
                             <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
                         </div>
                         <button title="Clear History" class="options" id="clear-history"><i class="fas fa-solid fa-trash-can icon"></i></button>
-                        <button title="Refresh files" class="options" id="refresh-files"><i class="fas fa-solid fa-sync-alt icon"></i></button>
+                        <button title="Refresh Files" class="options" id="refresh-files"><i class="fas fa-solid fa-sync-alt icon"></i></button>
+                        <button title="Open Media Folder" class="options" id="media-folder"><i class="fa-solid fa-images icon"></i></button>
                         <button title="Update API Key" class="options" id="api-key"><i class="fas fa-key icon"></i></button>
                         <button title="Settings" class="options" id="open-settings"><i class="fas fa-cog icon"></i></button>
                     </div>

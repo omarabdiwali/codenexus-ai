@@ -23,6 +23,9 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 - **Conversation Management**:
   - 5-message history retention.
   - One-click history clearance.
+- **Image Generation**
+  - Allows the viewing and creation of images with compatible LLMs.
+  - Saves the generated image locally.
 - **OpenRouter Integration**: 
   - Secure API key management with automatic validation.
 
