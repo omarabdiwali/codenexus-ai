@@ -344,12 +344,12 @@ class LRUCache {
     async getTextFile() {
         let textFromFiles = "Files recently mentioned:\n\n";
         
-        for (const [location, fileName] of Array.from(this.cache)) {
+        for (const [location, filename] of Array.from(this.cache)) {
             const fileText = await getTextFromFile(location);
             if (fileText === null) {
                 this.delete(location);
             } else {
-                textFromFiles += `${fileName} (${location.substring(1)}):\n${fileText}\n\n`
+                textFromFiles += `${filename} (${location.substring(1)}):\n${fileText}\n\n`
             }
         }
 

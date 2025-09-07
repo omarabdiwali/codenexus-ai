@@ -853,7 +853,7 @@ class CodeNexusViewProvider {
                 if (currentlyResponding) return;
                 if (llmIndex >= numOfModels || llmIndex < 0) {
                     const provider = ollama ? 'Ollama' : 'OpenRouter';
-                    vscode.window.showErrorMessage(`No available models for ${provider}. Add LLMs using the 'Settings' icon on the webview.`);
+                    await vscode.window.showErrorMessage(`No available models for ${provider}. Add LLMs using the 'Settings' icon on the webview.`);
                     return;
                 }
                 
@@ -941,6 +941,18 @@ class CodeNexusViewProvider {
                 const mediaDirectory = vscode.Uri.joinPath(this._extensionUri, "media");
                 verifyDirectoryExists(mediaDirectory.fsPath);
                 await vscode.env.openExternal(mediaDirectory);
+            } else if (message.command === 'openFile') {
+                try {
+                    const uri = vscode.Uri.file(message.location);
+                    await vscode.window.showTextDocument(uri);
+                } catch (e) {
+                    let message = e.message;
+                    if (e.name === "CodeExpectedError") {
+                        const startIndex = e.message.indexOf("Error:");
+                        message = e.message.substring(startIndex, e.message.length - 1);
+                    }
+                    await vscode.window.showErrorMessage(message || `Error opening file: ${message.location}`);
+                }
             }
         });
     }

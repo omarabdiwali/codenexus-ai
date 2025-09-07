@@ -219,6 +219,9 @@ pre code.hljs {
     margin: 0;
     line-height: 1;
 }
+.close-button:hover, #name:hover {
+    color: white;
+}
 .options-container {
     display: flex;
     align-items: center;
@@ -363,4 +366,7 @@ pre code.hljs {
 }
 .response-copy:hover {
     color: rgb(115, 178, 198);
+}
+#name {
+    cursor: pointer;
 }

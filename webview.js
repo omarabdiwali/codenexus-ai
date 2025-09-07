@@ -137,6 +137,29 @@ const replaceContextFileCount = (size) => {
 }
 
 /**
+ * Deletes a specified child from the `contextFiles` element.
+ * @param {string} location - The file path of the context file child to remove.
+ */
+const deleteContextFileChild = (location) => {
+    const children = Array.from(contextFiles.children);
+    for (const child of children) {
+        if (child.dataset.unique == location) {
+            contextFiles.removeChild(child);
+            break;
+        }
+    }
+}
+
+/**
+ * 
+ * @param {string} location - The unique identifier for the element: the location of the file.
+ * @returns {boolean} `true` if the element exists, `false` otherwise.
+ */
+const contextFileElementExists = (location) => {
+    return Array.from(contextFiles.children).some((child) => child.dataset.unique == location);
+}
+
+/**
  * Removes a deleted context file from storage and UI.
  * @param {string} location - The file path of the context file to remove.
  */
@@ -173,47 +196,68 @@ const alreadyShowingFiles = (className, location) => {
 }
 
 /**
- * Updates `mentionedFiles` using the most recent `prompt` value, keeping it up-to-date.
+ * Updates `mentionedFiles` using the most recent `prompt` value, keeping it up to date.
  */
 const updateMentionedFiles = () => {
     const value = prompt.value;
     let match;
     let verified = {};
 
-    removeMentionedFiles();
-    contextFileElements.clear();
-    for (const [location, filename] of contextedFilesStorage) {
-        contextFileElements.put(location, filename);
-    }
-
     while ((match = regEx.exec(value)) != null) {
         const key = match.index;
-        const fileName = match[0].substring(1);
-        if (key in mentionedFiles && mentionedFiles[key][0] == fileName) {
+        const filename = match[0].substring(1);
+        const keyExists = key in mentionedFiles && mentionedFiles[key][0] == filename; 
+        const isValidFile = keyExists && filename in fileTitlesWithLocations && fileTitlesWithLocations[filename].includes(mentionedFiles[key][1]);
+
+        if (isValidFile) {
             const location = mentionedFiles[key][1];
             verified[key] = mentionedFiles[key];
-            createContextedFileElement(fileName, location, 'temp-mention');
-            contextFileElements.put(location, fileName);
-        } else if (fileName in fileTitlesWithLocations) {
-            const location = fileTitlesWithLocations[fileName][0];
-            createContextedFileElement(fileName, location, 'temp-mention');
-            verified[key] = [fileName, location];
-            contextFileElements.put(location, fileName);
+            contextFileElements.put(location, filename);
+        } else if (filename in fileTitlesWithLocations) {
+            const location = fileTitlesWithLocations[filename][0];
+            verified[key] = [filename, location];
+            contextFileElements.put(location, filename);
+        } else if (contextFileElementExists(location)) {
+            deleteContextFileChild(location);
         }
     }
 
-    showContextFiles();
     mentionedFiles = verified;
 }
 
 /**
+ * Updates `contextFiles`, keeping it parallel with the current `mentionedFiles`.
+ */
+const updateContextFiles = () => {
+    removeMentionedFiles();
+    contextFileElements.clear();
+
+    for (const [location, filename] of contextedFilesStorage) {
+        if (filename in fileTitlesWithLocations && fileTitlesWithLocations[filename].includes(location)) {
+            contextFileElements.put(location, filename);
+        } else if (contextFileElementExists(location)) {
+            deleteContextFileChild(location);
+        }
+    }
+
+    updateMentionedFiles();
+
+    for (const [key, fileDetails] of Object.entries(mentionedFiles)) {
+        const [filename, location] = fileDetails;
+        createContextedFileElement(filename, location, 'temp-mention');
+    }
+    
+    showContextFiles();
+}
+
+/**
  * Creates UI element for a context file with remove button.
- * @param {string} fileName - The name of the file.
+ * @param {string} filename - The name of the file.
  * @param {string} location - The full path of the file.
  * @param {string} [className='file-mention'] - The className that the created element should have.
  * @returns {boolean} `true` if the element was created successfully, `false` otherwise.
  */
-const createContextedFileElement = (fileName, location, className='file-mention') => {
+const createContextedFileElement = (filename, location, className='file-mention') => {
     if (!baseWorkspacePath || alreadyShowingFiles(className, location)) return false;
 
     const relativeLocation = location.substring(baseWorkspacePath.length + 1);
@@ -228,13 +272,17 @@ const createContextedFileElement = (fileName, location, className='file-mention'
 
     main.key = location;
     main.title = relativeLocation;
-    name.innerText = fileName;
+    name.innerText = filename;
     cancel.innerText = 'x';
     cancel.style.paddingLeft = '7px';
 
     cancel.addEventListener('click', (e) => {
         main.remove();
         removeDeletedContext(location);
+    })
+
+    name.addEventListener('click', (e) => {
+        vscode.postMessage({ command: "openFile", location });
     })
 
     main.appendChild(name);
@@ -249,14 +297,18 @@ const createContextedFileElement = (fileName, location, className='file-mention'
 const addContextedFiles = () => {
     contextFileElements.clear();
     contextFiles.replaceChildren();
+    updateMentionedFiles();
 
-    for (const [location, fileName] of contextedFilesStorage) {
-        createContextedFileElement(fileName, location);
-        contextFileElements.put(location, fileName);
+    for (const [location, filename] of contextedFilesStorage) {
+        if (filename in fileTitlesWithLocations && fileTitlesWithLocations[filename].includes(location)) {
+            createContextedFileElement(filename, location);
+            contextFileElements.put(location, filename);
+        }
     }
-    for (const [fileName, location] of Object.values(mentionedFiles)) {
-        createContextedFileElement(fileName, location, "temp-mention");
-        contextFileElements.put(location, fileName);
+    for (const [key, fileDetails] of Object.entries(mentionedFiles)) {
+        const [filename, location] = fileDetails;
+        createContextedFileElement(filename, location, "temp-mention");
+        contextFileElements.put(location, filename);
     }
 
     showContextFiles();
@@ -531,11 +583,11 @@ const verifyMentionedFiles = (value) => {
 
     while ((match = regEx.exec(value)) != null) {
         const key = match.index;
-        const fileName = match[0].substring(1);
-        if (key in mentionedFiles && mentionedFiles[key][0] == fileName) {
+        const filename = match[0].substring(1);
+        if (key in mentionedFiles && mentionedFiles[key][0] == filename) {
             verified[key] = mentionedFiles[key];
-        } else if (fileName in fileTitlesWithLocations) {
-            verified[key] = [fileName, fileTitlesWithLocations[fileName][0]];
+        } else if (filename in fileTitlesWithLocations) {
+            verified[key] = [filename, fileTitlesWithLocations[filename][0]];
         }
     }
 
@@ -610,7 +662,7 @@ const getCorrectFilename = (string) => {
 /**
  * Replaces cursor word with selected filename from autocomplete.
  * @param {number} start - The start position of the word.
- * @param {Array} fileInfo - The file information [fileName, location].
+ * @param {Array} fileInfo - The file information [filename, location].
  */
 const replaceCursorWord = (start, fileInfo) => {
     const value = prompt.value;
@@ -630,7 +682,7 @@ const replaceCursorWord = (start, fileInfo) => {
     mentionedFiles[startIndex] = [word, location];
     fileSearch.replaceChildren();
     fileSearch.style.display = 'none';
-    updateMentionedFiles();
+    updateContextFiles();
 }
 
 /**
@@ -685,14 +737,14 @@ const createSearchItem = (file, value, idx, total) => {
  */
 const orderFileOptions = (options) => {
     return options.sort((a, b) => {
-        const [fileNameA, locationA] = a;
-        const [fileNameB, locationB] = b;
+        const [filenameA, locationA] = a;
+        const [filenameB, locationB] = b;
 
         const entryA = Object.entries(mentionedFiles).find(
-            ([key, [name, loc]]) => name === fileNameA && loc === locationA
+            ([key, [name, loc]]) => name === filenameA && loc === locationA
         );
         const entryB = Object.entries(mentionedFiles).find(
-            ([key, [name, loc]]) => name === fileNameB && loc === locationB
+            ([key, [name, loc]]) => name === filenameB && loc === locationB
         );
 
         const isMentionedA = !!entryA;
@@ -706,7 +758,7 @@ const orderFileOptions = (options) => {
             return keyB - keyA;
         }
 
-        const nameCompare = fileNameA.localeCompare(fileNameB);
+        const nameCompare = filenameA.localeCompare(filenameB);
         if (nameCompare !== 0) return nameCompare;
         return locationA.localeCompare(locationB);
     });
@@ -739,9 +791,9 @@ const showFileOptions = (string) => {
     }
 
     let flatOptions = [];
-    for (const [fileName, locations] of options) {
+    for (const [filename, locations] of options) {
         for (const loc of locations) {
-            flatOptions.push([fileName, loc]);
+            flatOptions.push([filename, loc]);
         }
     }
 
@@ -749,8 +801,8 @@ const showFileOptions = (string) => {
     const totalLength = orderedOptions.length;
     let idx = 0;
 
-    for (const [fileName, location] of orderedOptions) {
-        const row = createSearchItem(fileName, location, idx, totalLength);
+    for (const [filename, location] of orderedOptions) {
+        const row = createSearchItem(filename, location, idx, totalLength);
         idx += 1;
         fileSearch.appendChild(row);
     }
@@ -879,7 +931,7 @@ prompt.addEventListener("keydown", (event) => {
 
 prompt.addEventListener("input", (event) => {
     autocompleteUsed = false;
-    updateMentionedFiles();
+    updateContextFiles();
     vscode.postMessage({ command: 'updatePrompt', value: prompt.value, files: mentionedFiles });
 });
 
@@ -908,6 +960,7 @@ window.addEventListener("message", (e) => {
     const { command, text, value, key } = e.data;
 
     if (command == "response") {
+        if (!(responseArea.lastElementChild)) return;
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
         if (value) {
             highlightNewCodeBlocks(lastMatching + 5000);
@@ -915,8 +968,10 @@ window.addEventListener("message", (e) => {
             generateResponseCopyButton(responseArea.lastElementChild, key)
         } else highlightNewCodeBlocks();
     } else if (command == "loading") {
+        if (!(responseArea.lastElementChild)) return;
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
     } else if (command == "error") {
+        if (!(responseArea.lastElementChild)) return;
         responseArea.lastElementChild.querySelector('.response').innerText = text;
         generateCloseButton(responseArea.lastElementChild, key);
     } else if (command == 'chat') {
@@ -956,7 +1011,6 @@ window.addEventListener("message", (e) => {
     } else if (command == 'promptValue') {
         prompt.value = text;
         mentionedFiles = value;
-        addContextedFiles();
     } else if (command == 'updateValues') {
         const [toFile, agent, index, fileSize] = value;
         writeToFileCheckbox.checked = toFile;
