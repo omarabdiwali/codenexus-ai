@@ -247,11 +247,18 @@ const createContextedFileElement = (fileName, location, className='file-mention'
  * Renders all context files in the UI with count display.
  */
 const addContextedFiles = () => {
+    contextFileElements.clear();
     contextFiles.replaceChildren();
-    let fileCount = 0;
+
     for (const [location, fileName] of contextedFilesStorage) {
-        if (createContextedFileElement(fileName, location)) fileCount += 1;
+        createContextedFileElement(fileName, location);
+        contextFileElements.put(location, fileName);
     }
+    for (const [fileName, location] of Object.values(mentionedFiles)) {
+        createContextedFileElement(fileName, location, "temp-mention");
+        contextFileElements.put(location, fileName);
+    }
+
     showContextFiles();
 }
 
@@ -949,6 +956,7 @@ window.addEventListener("message", (e) => {
     } else if (command == 'promptValue') {
         prompt.value = text;
         mentionedFiles = value;
+        addContextedFiles();
     } else if (command == 'updateValues') {
         const [toFile, agent, index, fileSize] = value;
         writeToFileCheckbox.checked = toFile;
