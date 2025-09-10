@@ -9,25 +9,36 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 
 ![Extension Demo](https://i.imgur.com/LdPUDcZ.png)
 
+## 📋 Table of Contents
+- [Features](#-features)
+- [Quick Start / Installation](#-quick-start)
+- [Usage](#%EF%B8%8F-usage)
+- [Configuration](#%EF%B8%8F-configuration)
+- [Local LLM Support](#-local-llm-support-via-ollama)
+- [Project Structure](#-project-structure)
+- [Troubleshooting](#-troubleshooting)
+- [Contributing](#-contributing)
+- [License](#-license)
+
 ## ✨ Features
 
-- **Multi-LLM Support**: Switch between 5 different language models with automatic fallback.
-- **Ollama Usage**: Ability to switch and use Ollama LLMs exclusively, making everything local.
+- **Multi-LLM Support**: Switch between as many different OpenRouter LLMs as you want, with automatic fallback.
+- **Ollama Usage**: Ability to switch and use Ollama for complete privacy.
 - **Code Context Awareness**:
   - `@filename` syntax with auto-complete.
-  - LRU cached file context (3-file memory).
+  - LRU cached file context.
   - Highlight-to-chat integration (Ctrl+K/Cmd+K).
 - **Agent Mode**: 
-  - Python program generation/validation.
-  - Real-time code execution results.
+  - Intelligent Python program generation and validation.
+  - Real-time code execution with safety checks.
 - **Conversation Management**:
-  - 5-message history retention.
-  - One-click history clearance.
+  - Message history retention.
+  - One-click conversation reset.
 - **Image Generation**
   - Allows the viewing and creation of images with compatible LLMs.
   - Saves the generated image locally.
 - **OpenRouter Integration**: 
-  - Secure API key management with automatic validation.
+  - Secure API key management with validation.
 
 ## 🚀 Quick Start
 
@@ -37,11 +48,13 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 - [OpenRouter API Key](https://openrouter.ai/).
 - [Ollama](https://ollama.com) (optional, needed if you want access to local LLMs).
 
-### Installation
-Get the [latest release](https://github.com/omarabdiwali/codenexus-ai/releases/latest) and follow the installation process listed there.
+### Installation Options
 
-**OR**
+**Method 1: VSIX Package**
+1. Download the latest release from [GitHub Releases](https://github.com/omarabdiwali/codenexus-ai/releases).
+2. Install via VSCode: `Ctrl+Shift+P` → "Install from VSIX".
 
+**Method 2: Source Installation**
 ```bash
 git clone https://github.com/omarabdiwali/codenexus-ai.git
 npm install -g @vscode/vsce
@@ -106,9 +119,15 @@ Add local AI capabilities using Ollama's lightweight framework:
 | `styles.css`     | Visual styling.                           |
 | `spinner.css`    | Loading animation.                        |
 
-## 🛡️ Safety Features
-- Dangerous pattern detection in generated code.
-- Allows the user to decide whether or not to run the generated code.
+## 🔧 Troubleshooting
+
+**Common Issues:**
+- **Python not found**: Ensure Python 3.8+ is in your PATH.
+- **API key errors**: Re-enter your OpenRouter API key via command palette.
+- **Ollama connection**: Verify Ollama is running (`ollama serve`).
+
+**Debug Mode:**
+Enable developer tools via `Ctrl+Shift+P` → "Developer: Toggle Developer Tools".
 
 ## 🤝 Contributing
 We welcome contributions! Please follow our guidelines:
@@ -122,8 +141,3 @@ We welcome contributions! Please follow our guidelines:
 MIT License - See [LICENSE](LICENSE) for details.
 
 ---
-
-**Note**: 
- - Ensure Python is in your system PATH for Agent Mode functionality.  
- - Local development debugging available via `F5` in VSCode.  
- - Ensure that the Ollama model is pulled before its use in the extension.

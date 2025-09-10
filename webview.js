@@ -297,7 +297,6 @@ const createContextedFileElement = (filename, location, className='file-mention'
 const addContextedFiles = () => {
     contextFileElements.clear();
     contextFiles.replaceChildren();
-    updateMentionedFiles();
 
     for (const [location, filename] of contextedFilesStorage) {
         if (filename in fileTitlesWithLocations && fileTitlesWithLocations[filename].includes(location)) {
@@ -305,6 +304,9 @@ const addContextedFiles = () => {
             contextFileElements.put(location, filename);
         }
     }
+    
+    updateMentionedFiles();
+
     for (const [key, fileDetails] of Object.entries(mentionedFiles)) {
         const [filename, location] = fileDetails;
         createContextedFileElement(filename, location, "temp-mention");
