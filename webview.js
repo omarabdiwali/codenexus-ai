@@ -704,12 +704,7 @@ const createSearchItem = (file, value, idx, total) => {
     item.classList.add('search-item');
     item.innerHTML = `<b>${file}</b>: (<i>${location}</i>)`;
     item.tabIndex = "0"
-    item.addEventListener('mouseover', (event) => {
-        item.style.background = 'var(--vscode-input-background)';
-    })
-    item.addEventListener('mouseleave', (event) => {
-        item.style.background = null;
-    })
+
     item.addEventListener('click', (event) => {
         autocompleteUsed = true;
         replaceCursorWord(lastCursorPosition, [file, value]);
@@ -721,8 +716,11 @@ const createSearchItem = (file, value, idx, total) => {
             item.click();
         } else if (event.key == "ArrowUp") {
             event.preventDefault();
-            const prevIdx = (idx - 1 + total) % total;
-            fileSearch.children[prevIdx].focus();
+            if (idx == 0) prompt.focus();
+            else {
+                const prevIdx = (idx - 1 + total) % total;
+                fileSearch.children[prevIdx].focus();
+            }
         } else if (event.key == "ArrowDown") {
             event.preventDefault();
             const nextIdx = (idx + 1) % total;

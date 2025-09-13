@@ -1,7 +1,7 @@
 body, html {
     margin: 0;
     padding: 0;
-    background-color: rgb(0, 33, 43);
+    background-color: var(--vscode-sideBar-background);
     scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
     color: var(--vscode-editor-foreground);
     font-family: var(--vscode-font-family);
@@ -27,6 +27,7 @@ blockquote {
     padding: 5px;
 }
 .question {
+    color: var(--vscode-editor-selectionForeground);
     background-color: var(--vscode-editor-selectionBackground);
     margin-bottom: 2px;
 }
@@ -36,7 +37,7 @@ blockquote {
     right: 0px;
     padding: 6px 7px;
     background-color: transparent;
-    color: var(--vscode-button-foreground);
+    color: var(--vscode-editor-selectionForeground);
     cursor: pointer;
     opacity: 60%;
     border: none;
@@ -79,7 +80,7 @@ blockquote {
 }
 #input-area{
     padding: 10px;
-    background-color: rgb(0, 41, 53);
+    background-color: var(--vscode-editor-background);
     flex-shrink: 0;
 }
 .code-container-buttons {
@@ -183,10 +184,10 @@ pre code.hljs {
     box-sizing: border-box;
     border: 1px solid var(--vscode-input-border);
     background-color: var(--vscode-input-background);
-    color: #f0e68c;
+    color: var(--vscode-gitDecoration-modifiedResourceForeground);
     padding: 10px;
     margin-bottom: 10px;
-    resize:vertical;
+    resize: vertical;
     font-family: var(--vscode-font-family);
     border-radius: var(--border-radius-size);
 }
@@ -220,7 +221,7 @@ pre code.hljs {
     line-height: 1;
 }
 .close-button:hover, #name:hover {
-    color: white;
+    color: var(--vscode-button-hoverBackground);
 }
 .options-container {
     display: flex;
@@ -265,8 +266,11 @@ pre code.hljs {
     outline: none;
     background: var(--vscode-input-background);
 }
+.search-item:hover {
+    background-color: var(--vscode-input-background);
+}
 #context-files {
-    background-color: rgb(0, 33, 43);
+    background-color: var(--vscode-sideBar-background);
     padding: 10px;
     display: none;
     flex-direction: row;
@@ -288,7 +292,7 @@ pre code.hljs {
     align-items: center;
 }
 .file-mention:hover {
-    background-color: rgb(0, 33, 43);
+    background-color: transparent;
     border: 2px solid var(--vscode-input-background);
     border-radius: var(--border-radius-size);
 }
@@ -364,9 +368,12 @@ pre code.hljs {
     display: block;
     margin-left: auto;
 }
-.response-copy:hover {
+.response-copy:hover, .delete-entry:hover {
     color: rgb(115, 178, 198);
 }
 #name {
     cursor: pointer;
+}
+.label-text {
+    color: var(--vscode-dropdown-foreground);
 }
