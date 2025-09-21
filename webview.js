@@ -337,8 +337,9 @@ const formatUserQuestion = (text) => {
  */
 const generateRunButton = (key) => {
     const runButton = document.createElement('button');
-    runButton.innerText = 'Run';
-    runButton.classList.add('interactive-button');
+    runButton.innerHTML = '<i class="fa-solid fa-play"></i>';
+    runButton.title = 'Run';
+    runButton.classList.add('run-button');
 
     runButton.onclick = () => {
         vscode.postMessage({ command: "runProgram", key });
@@ -355,13 +356,20 @@ const generateRunButton = (key) => {
  */
 const generateCopyButton = (text) => {
     const copyButton = document.createElement('button');
-    copyButton.innerText = 'Copy';
-    copyButton.classList.add('interactive-button');
+    copyButton.innerHTML = `<i class="fa-solid fa-copy"></i>`;
+    copyButton.title = "Copy";
+    copyButton.classList.add('code-copy');
 
     copyButton.onclick = () => {
         vscode.postMessage({ command: 'copy', text });
-        copyButton.innerText = 'Copied!';
-        setTimeout(() => copyButton.innerText = 'Copy', 2000);
+        copyButton.innerHTML = '<i class="fa-solid fa-check"></i>';
+        copyButton.title = 'Copied!';
+        copyButton.disabled = true;
+        setTimeout(() => {
+            copyButton.innerHTML = '<i class="fa-solid fa-copy"></i>';
+            copyButton.title = 'Copy';
+            copyButton.disabled = false;
+        }, 2000);
     };
 
     return copyButton;
@@ -382,9 +390,11 @@ const generateResponseCopyButton = (element, key) => {
         vscode.postMessage({ command: 'copyResponse', key });
         copyButton.innerHTML = '<i class="fa-solid fa-check"></i>';
         copyButton.title = 'Copied!'
+        copyButton.disabled = true;
         setTimeout(() => {
             copyButton.innerHTML = `<i class="fa-solid fa-copy"></i>`
             copyButton.title = 'Copy';
+            copyButton.disabled = false;
         }, 2000);
     }
 
@@ -415,34 +425,33 @@ const generateCloseButton = (chatEntry, key) => {
  */
 const generateButtons = (codeBlock, currentTime) => {
     const container = document.createElement('div');
-    const buttonDiv = document.createElement('div');
+    const header = document.createElement('div');
     if (!codeBlock.textContent) return;
     const copyButton = generateCopyButton(codeBlock.textContent.trim());
 
     container.classList.add('code-container');
-    buttonDiv.classList.add('code-container-buttons');
+    header.classList.add('code-header-response');
     codeBlock.parentNode.insertBefore(container, codeBlock);
+    container.appendChild(header);
     container.appendChild(codeBlock);
 
-    buttonDiv.appendChild(copyButton);
+    header.appendChild(copyButton);
     const codeKey = codeBlock.textContent.trim();
 
     if (currentTime && currentTime - lastMatching > 1000 && !(codeKey in alreadyMatched)) {
         lastMatching = currentTime;
         for (const [key, value] of queue) {
-            if (comapreCodeBlock(codeBlock.textContent.trim(), value.trim())) {
+            if (compareCodeBlock(codeBlock.textContent.trim(), value.trim())) {
                 const runButton = generateRunButton(key);
-                buttonDiv.appendChild(runButton);
+                header.appendChild(runButton);
                 alreadyMatched[codeKey] = key;
                 break;
             }
         }
     } else if (codeKey in alreadyMatched) {
         const runButton = generateRunButton(alreadyMatched[codeKey]);
-        buttonDiv.appendChild(runButton);
+        header.appendChild(runButton);
     }
-
-    container.appendChild(buttonDiv);
 };
 
 /**
@@ -869,7 +878,7 @@ const escapeString = (str) => {
  * @param {string} value - The value to compare against.
  * @returns {boolean} `true` if the code blocks are similar, `false` otherwise.
  */
-const comapreCodeBlock = (codeBlock, value) => {
+const compareCodeBlock = (codeBlock, value) => {
     const normCode = escapeString(normalizeString(codeBlock));
     const normValue = escapeString(normalizeString(value));
     const distance = levenDist(normCode, normValue);

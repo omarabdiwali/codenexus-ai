@@ -101,10 +101,29 @@ blockquote {
 .interactive-button:hover {
     background-color: var(--vscode-button-hoverBackground);
 }
-.interactive-button:disabled {
+.interactive-button:disabled, .button-styling:disabled {
     pointer-events: none;
     opacity: 50%;
     cursor: default;
+}
+.code-copy:disabled, .response-copy:disabled {
+    pointer-events: none;
+    cursor: default;
+}
+.code-copy, .run-button {
+    border: none;
+    background-color: transparent;
+    color: rgb(77, 124, 138);
+    cursor: pointer;
+}
+.run-button {
+    color: green;
+}
+.run-button:hover {
+    color: rgb(13, 184, 13);
+}
+.code-copy:hover {
+    color: rgb(115, 178, 198);
 }
 pre code.hljs {
     position: relative;
@@ -200,7 +219,7 @@ pre code.hljs {
     overflow-x: auto !important;
     overflow-y: auto !important;
 }
-.code-header {
+.code-header, .code-header-response {
     width: 100%;
     background-color: rgba(0, 0, 0, 0.3);
     padding: 5px;
@@ -208,6 +227,12 @@ pre code.hljs {
     display: flex;
     justify-content: flex-end;
     box-sizing: border-box;
+}
+.code-header-response {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding-top: 8px;
 }
 .close-button {
     background-color: transparent;
@@ -229,10 +254,6 @@ pre code.hljs {
 }
 .button-styling {
     width: 100%;
-}
-.button-styling:disabled {
-    opacity: 0.5;
-    cursor: default;
 }
 .button-styling:disabled:hover {
     background-color: var(--vscode-button-background);
