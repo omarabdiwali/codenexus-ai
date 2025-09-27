@@ -350,24 +350,29 @@ const generateRunButton = (key) => {
 }
 
 /**
- * Creates a 'Copy' button for code blocks.
- * @param {string} text - The text to copy.
+ * Creates a 'Copy' button for code blocks and chat entries.
+ * @param {string} identifier - The text or id to copy.
+ * @param {string} className - The className of the button.
  * @returns {HTMLButtonElement} The copy button element.
  */
-const generateCopyButton = (text) => {
+const generateCopyButton = (identifier, className) => {
+    const command = className == 'code-copy' ? 'copy' : 'copyResponse';
+    const message = command == 'copy' ? { command, text: identifier } : { command, key: identifier };
+    const title = command == 'copy' ? 'Copy Code' : 'Copy Response';
+
     const copyButton = document.createElement('button');
     copyButton.innerHTML = `<i class="fa-solid fa-copy"></i>`;
-    copyButton.title = "Copy";
-    copyButton.classList.add('code-copy');
+    copyButton.title = title;
+    copyButton.classList.add(className);
 
     copyButton.onclick = () => {
-        vscode.postMessage({ command: 'copy', text });
+        vscode.postMessage(message);
         copyButton.innerHTML = '<i class="fa-solid fa-check"></i>';
         copyButton.title = 'Copied!';
         copyButton.disabled = true;
         setTimeout(() => {
             copyButton.innerHTML = '<i class="fa-solid fa-copy"></i>';
-            copyButton.title = 'Copy';
+            copyButton.title = title;
             copyButton.disabled = false;
         }, 2000);
     };
@@ -376,46 +381,41 @@ const generateCopyButton = (text) => {
 }
 
 /**
- * Creates a 'Copy' button for the chat entry, which will copy the response in Markdown format.
- * @param {HTMLElement} element - The element to assign the copy button top.
- * @param {string} key - The key identifier for the response element.
+ * Generates a 'Delete' button for a chat entry.
+ * @param {HTMLElement} element - The chat entry element.
+ * @param {string} key - The key identifier for the chat entry.
+ * @returns {HTMLButtonElement} The delete button.
  */
-const generateResponseCopyButton = (element, key) => {
-    const copyButton = document.createElement('button');
-    copyButton.innerHTML = `<i class="fa-solid fa-copy"></i>`;
-    copyButton.classList.add('response-copy');
-    copyButton.title = 'Copy'
-
-    copyButton.onclick = () => {
-        vscode.postMessage({ command: 'copyResponse', key });
-        copyButton.innerHTML = '<i class="fa-solid fa-check"></i>';
-        copyButton.title = 'Copied!'
-        copyButton.disabled = true;
-        setTimeout(() => {
-            copyButton.innerHTML = `<i class="fa-solid fa-copy"></i>`
-            copyButton.title = 'Copy';
-            copyButton.disabled = false;
-        }, 2000);
+const generateDeleteButton = (element, key) => {
+    const button = document.createElement('button');
+    button.innerHTML = `<i class="fa-solid fa-trash-can"></i>`;
+    button.classList.add('delete-button');
+    button.title = 'Delete Entry'
+    button.onclick = () => {
+        vscode.postMessage({ command: "deleteEntry", key });
+        element.remove();
     }
 
-    element.appendChild(copyButton);
+    return button;
 }
 
 /**
- * Generates a 'Delete' button for a chat entry.
- * @param {HTMLElement} chatEntry - The chat entry element.
- * @param {string} key - The key identifier for the chat entry.
+ * Creates and applies the 'Copy' and 'Delete' buttons to the chat entry.
+ * @param {HTMLElement} element - The chat entry element.
+ * @param {string} key - The unique identifier for the chat entry.
  */
-const generateCloseButton = (chatEntry, key) => {
-    const button = document.createElement('button');
-    button.innerText = 'X';
-    button.classList.add('delete-entry');
-    button.onclick = () => {
-        vscode.postMessage({ command: "deleteEntry", key });
-        chatEntry.remove();
-    }
+const generateChatEntryButtons = (element, key) => {
+    const responseElement = element.querySelector('.response');
+    if (!responseElement) return;
 
-    chatEntry.appendChild(button);
+    const buttonDiv = document.createElement('div');
+    const copyButton = generateCopyButton(key, 'response-button');
+    const deleteButton = generateDeleteButton(element, key);
+    
+    buttonDiv.classList.add("code-container-buttons");
+    buttonDiv.appendChild(copyButton);
+    buttonDiv.appendChild(deleteButton);
+    responseElement.appendChild(buttonDiv);
 }
 
 /**
@@ -427,7 +427,7 @@ const generateButtons = (codeBlock, currentTime) => {
     const container = document.createElement('div');
     const header = document.createElement('div');
     if (!codeBlock.textContent) return;
-    const copyButton = generateCopyButton(codeBlock.textContent.trim());
+    const copyButton = generateCopyButton(codeBlock.textContent.trim(), 'code-copy');
 
     container.classList.add('code-container');
     header.classList.add('code-header-response');
@@ -524,9 +524,7 @@ const highlightAllCodeBlocks = () => {
  */
 const addButtons = () => {
     document.querySelectorAll(".chat-entry").forEach((element) => {
-        const responseElement = element.querySelector('.response');
-        generateCloseButton(element, element.id);
-        responseElement && generateResponseCopyButton(responseElement, element.id);
+        generateChatEntryButtons(element, element.id);
     })
 }
 
@@ -973,8 +971,7 @@ window.addEventListener("message", (e) => {
         responseArea.lastElementChild.querySelector('.response').innerHTML = text;
         if (value) {
             highlightNewCodeBlocks(lastMatching + 5000);
-            generateCloseButton(responseArea.lastElementChild, key);
-            generateResponseCopyButton(responseArea.lastElementChild, key)
+            generateChatEntryButtons(responseArea.lastElementChild, key);
         } else highlightNewCodeBlocks();
     } else if (command == "loading") {
         if (!(responseArea.lastElementChild)) return;
@@ -982,7 +979,7 @@ window.addEventListener("message", (e) => {
     } else if (command == "error") {
         if (!(responseArea.lastElementChild)) return;
         responseArea.lastElementChild.querySelector('.response').innerText = text;
-        generateCloseButton(responseArea.lastElementChild, key);
+        generateChatEntryButtons(responseArea.lastElementChild, key);
     } else if (command == 'chat') {
         appendToChat(text);
     } else if (command == 'focus') {
