@@ -7,7 +7,7 @@
 
 A powerful VSCode extension that brings multi-LLM intelligence to your coding workflow, with advanced context awareness and code execution capabilities.
 
-![Extension Demo](https://i.imgur.com/LdPUDcZ.png)
+![Extension Demo](https://i.imgur.com/Hp8cQTz.png)
 
 ## 📋 Table of Contents
 - [Features](#-features)
@@ -72,7 +72,7 @@ code --install-extension codenexus-ai-*.vsix
 3. Highlight code + Ctrl/K for instant context.
 
 ### Agent Mode
-![Agent Mode Demo](https://i.imgur.com/vLAuwSa.png)
+![Agent Mode Demo](https://i.imgur.com/M7msv9H.png)
 1. Start query with "Please create..." or "Write a program to...".
 2. Review generated Python code.
 3. Click "Run" for execution.

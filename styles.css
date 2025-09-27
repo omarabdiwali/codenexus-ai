@@ -87,6 +87,9 @@ blockquote {
     display: flex;
     align-items: center;
 }
+.code-container-buttons > :first-child {
+    margin-left: auto;
+}
 .interactive-button {
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
@@ -249,6 +252,9 @@ pre code.hljs {
     display: flex;
     align-items: center;
 }
+.options-container > button:first-of-type {
+    margin-left: auto;
+}
 .button-styling {
     width: 100%;
 }
@@ -355,9 +361,6 @@ pre code.hljs {
 .options:hover {
     color: rgb(115, 178, 198);
 }
-#clear-history {
-    margin-left: auto;
-}
 #refresh-files:disabled {
     cursor: default;
     opacity: 30%;
@@ -384,9 +387,6 @@ pre code.hljs {
     font-size: 15px;
     cursor: pointer;
     display: block;
-}
-.response-button {
-    margin-left: auto;
 }
 .response-button:hover, .delete-button:hover {
     color: rgb(115, 178, 198);
