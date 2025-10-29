@@ -277,7 +277,7 @@ const isChanged = (value, event) => {
 /**
  * Updates queued configuration changes.
  */
-const updateQueuedChanges = () => {
+const updateQueuedChanges = async () => {
     for (const [variant, value] of queuedChanges) {
         if (variant == "selectLLM") {
             llmIndex = parseInt(value);
@@ -285,6 +285,8 @@ const updateQueuedChanges = () => {
             writeToFile = value;
         } else if (variant == "changeMode") {
             agentMode = value == "false" ? false : true;
+        } else if (variant == "configUpdate") {
+            await getConfigData(value[0], value[1]);
         }
     }
 
@@ -633,7 +635,8 @@ async function activate(context) {
 
     vscode.workspace.onDidChangeConfiguration(async (event) => {        
         if (event.affectsConfiguration("CodenexusAI")) {
-            await getConfigData(event, provider);
+            if (currentlyResponding) queuedChanges.push(["configUpdate", [event, provider]]);
+            else await getConfigData(event, provider);
         }
     })
 
@@ -889,7 +892,7 @@ class CodeNexusViewProvider {
                 else await sendChat(this, messages, this.openChat, text, llmIndex, 0, userQuestion, openRouterModels, openRouterNames);
                 this.postMessage('cancelView', { value: false });
 
-                updateQueuedChanges();
+                await updateQueuedChanges();
                 currentlyResponding = false;
                 lastCalled = 0;
             } else if (message.command === 'copy') {
