@@ -28,16 +28,20 @@ const {
     runPythonFile,
     getAllRunnablePrograms,
     debounce,
+    sanitizeString,
+    initializeNewSession,
+    setSessionTitle,
 } = require("./functions");
 
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
-const fileHistory = new LRUCache(3);
+let fileHistory = new LRUCache(3);
 const defaultInclude = "";
 const defaultExclude = "{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}";
 
-let questionsAndResponses = [];
+let sessions = [];
+let currentSession = initializeNewSession(sessions, 3);
 let currentResponse = "";
 let textFromFile = "";
 let promptValue = "";
@@ -57,15 +61,16 @@ let queuedChanges = [];
 let runnablePrograms = {}
 let lastCalled = 0;
 let interactionHistory = 5;
+let lruSize = 3;
 let include = defaultInclude;
 let exclude = defaultExclude;
 
 const mdProcessor = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkRehype)
-  .use(rehypeSanitize)
-  .use(rehypeStringify);
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkRehype)
+    .use(rehypeSanitize)
+    .use(rehypeStringify);
 
 const token = '!@!@!@!'
 const backticks = '```';
@@ -103,6 +108,26 @@ let openRouterNames = [];
 let ollamaModels = [];
 let ollamaNames = [];
 let customSystemPrompt = "";
+
+/**
+ * Sets the global variables to the fields in the chosen `sessionId`.
+ * @param {string | number} sessionId - The selected sessionId.
+ */
+const setGlobalVariables = (sessionId) => {
+    if (!(sessionId in sessions)) return;
+    promptValue = sessions[sessionId].prompt;
+    currentMentionedFiles = sessions[sessionId].mentionedFiles;
+    writeToFile = sessions[sessionId].writeToFile;
+    agentMode = sessions[sessionId].agentMode;
+    outputFileName = sessions[sessionId].outputFileName;
+
+    const currentModels = ollama ? ollamaModels : openRouterModels;
+    llmIndex = Math.min(sessions[sessionId].llmIndex, currentModels.length - 1);
+    llmIndex = Math.max(llmIndex, 0);
+    sessions[sessionId].llmIndex = llmIndex;
+    fileHistory = sessions[sessionId].fileHistory;
+    if (fileHistory.size() != lruSize) fileHistory.changeSize(lruSize);
+}
 
 /**
  * Adds file information to user question by replacing file mentions with file titles and locations.
@@ -173,7 +198,7 @@ const handleModelAndNameChanges = (change, type, newValue, provider, config) => 
         ollamaNames = modelChange ? otherValue.slice(0, cutoff) : newValue.slice(0, cutoff);
         renderChange = ollama;
     }
-    
+
     const names = ollama ? ollamaNames : openRouterNames;
     llmIndex = Math.min(llmIndex, names.length - 1);
     llmIndex = Math.max(0, llmIndex);
@@ -190,6 +215,16 @@ const handleModelAndNameChanges = (change, type, newValue, provider, config) => 
 }
 
 const configChangeDebounce = debounce(fileConfigChange, 3000);
+
+/**
+ * Checks if a specific configuration has changed.
+ * @param {string} value - The configuration key to check.
+ * @param {vscode.ConfigurationChangeEvent} event - The configuration change event.
+ * @returns {boolean} `true` if the configuration has changed.
+ */
+const isChanged = (value, event) => {
+    return event.affectsConfiguration(`CodenexusAI.${value}`)
+}
 
 /**
  * Updates configuration based on workspace changes.
@@ -215,9 +250,9 @@ const updateConfig = async (event, provider) => {
         ollama = config.get("UseOllama", false);
         handleModelAndNameChanges("useOllama", "ollama", [], provider, config);
     } else if (isChanged("ContextFileSize", event)) {
-        const fileSize = config.get("ContextFileSize", 3);
-        fileHistory.changeSize(fileSize);
-        const payload = { key: "fileSize", value: fileSize };
+        lruSize = config.get("ContextFileSize", 3);
+        fileHistory.changeSize(lruSize);
+        const payload = { key: "fileSize", value: lruSize };
         const otherPayload = { value: Array.from(fileHistory.cache) };
         provider.postMessage("configUpdate", payload);
         provider.postMessage("fileHistory", otherPayload);
@@ -244,34 +279,25 @@ const getConfigData = async (event=null, provider=null) => {
     const orModels = config.get("OpenRouterModels", []).filter((val) => val.trim().length != 0);
     const orModelNames = config.get("OpenRouterModelNames", []).filter((val) => val.trim().length != 0);
     const orLength = Math.min(orModels.length, orModelNames.length);
-    
+
     const olModels = config.get("OllamaModels", []).filter((val) => val.trim().length != 0);
     const olNames = config.get("OllamaModelNames", []).filter((val) => val.trim().length != 0);
     const olLength = Math.min(olModels.length, olNames.length);
-    
+
     ollamaModels = olModels.slice(0, olLength);
     ollamaNames = olNames.slice(0, olLength);
     openRouterModels = orModels.slice(0, orLength);
     openRouterNames = orModelNames.slice(0, orLength);
 
-    ollama = config.get("UseOllama", false);    
+    ollama = config.get("UseOllama", false);
     llmIndex = ollama ? Math.min(llmIndex, olLength - 1) : Math.min(llmIndex, orLength - 1);
     llmIndex = Math.max(0, llmIndex);
-    fileHistory.changeSize(config.get("ContextFileSize", 3));
+    lruSize = config.get("ContextFileSize", 3);
+    fileHistory.changeSize(lruSize);
     interactionHistory = config.get("ContextInteractionSize", 5);
     include = config.get("FilesIncluded", "");
     exclude = config.get("FilesExcluded", defaultExclude);
     customSystemPrompt = config.get("SystemPrompt", "").trim();
-}
-
-/**
- * Checks if a specific configuration has changed.
- * @param {string} value - The configuration key to check.
- * @param {vscode.ConfigurationChangeEvent} event - The configuration change event.
- * @returns {boolean} `true` if the configuration has changed.
- */
-const isChanged = (value, event) => {
-    return event.affectsConfiguration(`CodenexusAI.${value}`)
 }
 
 /**
@@ -281,10 +307,13 @@ const updateQueuedChanges = async () => {
     for (const [variant, value] of queuedChanges) {
         if (variant == "selectLLM") {
             llmIndex = parseInt(value);
+            sessions[currentSession].llmIndex = parseInt(value);
         } else if (variant == "outputToFile") {
             writeToFile = value;
+            sessions[currentSession].writeToFile = value;
         } else if (variant == "changeMode") {
             agentMode = value == "false" ? false : true;
+            sessions[currentSession].agentMode = value == "false" ? false : true;
         } else if (variant == "configUpdate") {
             await getConfigData(value[0], value[1]);
         }
@@ -356,7 +385,7 @@ const addImageToMessage = (messages, imageData, imageType, match) => {
             detail: "low"
         }
     }
-    
+
     let messageText = lastMessage.content[0].text;
     messageText = messageText.replace(match, "");
     lastMessage.content[0].text = messageText;
@@ -385,7 +414,7 @@ const generateMessages = async (chat, mentionedCode) => {
 
     agentMode && addMessage(messages, 'system', systemMessage);
     customSystemPrompt.length && addMessage(messages, 'system', customSystemPrompt);
-    
+
     if (fileHistory.size() > 0) {
         const files = await fileHistory.getTextFile();
         addMessage(messages, 'system', files + '\n\n' + baseMessage);
@@ -393,10 +422,11 @@ const generateMessages = async (chat, mentionedCode) => {
         addMessage(messages, 'system', baseMessage);
     }
 
-    for (const {question, response, mode} of questionsAndResponses.slice(-interactionHistory)) {
+    for (const { question, response, snippet, mode } of sessions[currentSession].chats.slice(-interactionHistory)) {
         const systemResponse = response.substring(0, response.lastIndexOf('\n'));
+        const compQuestion = snippet && snippet.trim().length > 0 ? question + '\n\n' + snippet : question;
         if (!agentMode && mode != agentMode) continue;
-        addMessage(messages, 'user', question);
+        addMessage(messages, 'user', compQuestion);
         addMessage(messages, 'assistant', systemResponse);
         parseResponseForImages(systemResponse, messages);
     }
@@ -428,8 +458,7 @@ const verifyDirectoryExists = (path) => {
 const translateImage = (provider, imageUrl) => {
     const slashIndex = imageUrl.indexOf('/');
     const semiColonIndex = imageUrl.indexOf(";");
-    
-    const imageType = imageUrl.substring(slashIndex+1, semiColonIndex);
+    const imageType = imageUrl.substring(slashIndex + 1, semiColonIndex);
     const imageBase64 = imageUrl.split(',')[1];
     const imageBuffer = Buffer.from(imageBase64, "base64");
     let filepath;
@@ -462,7 +491,7 @@ const parseResponseForImages = (response, messages) => {
         try {
             const imageBase64 = fs.readFileSync(uri.fsPath, "base64");
             const lastPeriodIndex = uri.fsPath.lastIndexOf('.');
-            const imageType = lastPeriodIndex != -1 ? uri.fsPath.substring(lastPeriodIndex+1).toLowerCase() : 'png';
+            const imageType = lastPeriodIndex != -1 ? uri.fsPath.substring(lastPeriodIndex + 1).toLowerCase() : 'png';
             addImageToMessage(messages, imageBase64, imageType, match[0]);
         } catch (e) { }
     }
@@ -496,7 +525,10 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
         for await (const chunk of stream) {
             if (sendMessage) provider.postMessage('cancelView', { value: true });
             sendMessage = false;
-            if (!continueResponse) break;
+            if (!continueResponse) {
+                stream.controller.abort();
+                break;
+            }
             let val = chunk.choices[0]?.delta?.content || "";
             if (chunk.choices[0]?.delta?.images) {
                 for (const image of chunk.choices[0].delta.images) {
@@ -514,7 +546,7 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
         continueResponse = true;
         let totalTime = `${(performance.now() - startTime) / 1000}`;
         totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
-        
+
         const runTime = `Call to ${names[index]} took ${totalTime} seconds.`;
         const totalResponse = `${currentResponse}\n\n**${runTime}**`;
         const key = crypto.randomUUID();
@@ -531,9 +563,10 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
 
         questionHistory.push(chat);
         responseHistory.push(totalResponse);
-        questionsAndResponses.push({
+        sessions[currentSession].chats.push({
             question: originalQuestion,
             response: totalResponse,
+            snippet: textFromFile,
             mode: agentMode,
             key
         })
@@ -616,7 +649,7 @@ async function activate(context) {
             vscode.window.showWarningMessage('No API Key entered. Key not updated.');
         }
     });
-    
+
     vscode.commands.registerCommand('codenexus-ai.chat.focus', async (data) => {
         if (provider) {
             if (!provider._view) await vscode.commands.executeCommand('workbench.view.extension.codenexus-ai-view');
@@ -633,7 +666,7 @@ async function activate(context) {
         await vscode.commands.executeCommand('codenexus-ai.chat.focus', text);
     });
 
-    vscode.workspace.onDidChangeConfiguration(async (event) => {        
+    vscode.workspace.onDidChangeConfiguration(async (event) => {
         if (event.affectsConfiguration("CodenexusAI")) {
             if (currentlyResponding) queuedChanges.push(["configUpdate", [event, provider]]);
             else await getConfigData(event, provider);
@@ -693,7 +726,7 @@ class CodeNexusViewProvider {
      * @param {string} command - The command to send.
      * @param {Object} [payload=null] - The payload data.
      */
-    postMessage(command, payload=null) {
+    postMessage(command, payload = null) {
         if (!this._view || !this._view.webview) return;
         this._view.webview.postMessage({ command, ...payload })
     }
@@ -716,7 +749,7 @@ class CodeNexusViewProvider {
             await new Promise(res => setTimeout(res, 500));
             this.postMessage('content', { text: htmlText });
         }
-        
+
         this.postMessage('focus');
     }
 
@@ -744,7 +777,12 @@ class CodeNexusViewProvider {
      * Updates page values in the webview.
      */
     updatePageValues() {
-        this.postMessage('updateValues', { value: [writeToFile, agentMode, llmIndex, fileHistory.capacity] });
+        const sessionTitles = {};
+        for (const key of Object.keys(sessions)) {
+            sessionTitles[key] = sessions[key].title; 
+        }
+        this.postMessage('canDelete', { text: currentSession, value: !currentlyResponding });
+        this.postMessage('updateValues', { value: [writeToFile, agentMode, llmIndex, fileHistory.capacity, outputFileName, sessionTitles, currentSession] });
         this.postMessage("promptValue", { text: promptValue, value: currentMentionedFiles });
         this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
     }
@@ -769,15 +807,17 @@ class CodeNexusViewProvider {
 
     /**
      * Updates the HTML content of the webview.
+     * @param {boolean} showSidebar - Boolean indicating if the sidebar should be in view.
      * @returns {Promise<void>}
      */
-    async updateHTML() {
+    async updateHTML(showSidebar) {
         if (!this._view || !this._view.webview) return;
-        this._view.webview.html = await this._getHtmlForWebview();
+        this._view.webview.html = await this._getHtmlForWebview(showSidebar);
         this.inProgress();
         this.updateWorkspacePath();
-        this.updatePageValues();
         this.updateFileList(false);
+        this.updatePageValues();
+        this.postMessage('focus');
     }
 
     /**
@@ -801,14 +841,14 @@ class CodeNexusViewProvider {
         if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
             resourceRoots.push(vscode.Uri.file(vscode.workspace.workspaceFolders[0].uri.fsPath));
         }
-        
+
         try {
             verifyDirectoryExists(mediaPath);
             resourceRoots.push(vscode.Uri.file(mediaPath));
         } catch (e) {
             console.log(e);
         }
-        
+
         return resourceRoots;
     }
 
@@ -836,9 +876,9 @@ class CodeNexusViewProvider {
 
         webviewView.onDidChangeVisibility(async () => {
             if (webviewView.visible) {
-                if (this.interactions != questionsAndResponses.length) {
+                if (this.interactions != sessions[currentSession].chats.length) {
                     webviewView.webview.html = await this._getHtmlForWebview();
-                    this.interactions = questionsAndResponses.length;
+                    this.interactions = sessions[currentSession].chats.length;
                 }
                 this.inProgress();
                 this.updateWorkspacePath();
@@ -847,6 +887,7 @@ class CodeNexusViewProvider {
                 this.postMessage('focus');
             } else {
                 textFromFile = "";
+                webviewView.webview.html = webviewView.webview.html.replace("sidebar-visible", "sidebar-hidden");
             }
         });
 
@@ -855,24 +896,42 @@ class CodeNexusViewProvider {
                 const numOfModels = ollama ? ollamaModels.length : openRouterModels.length;
                 if (currentlyResponding) return;
                 if (llmIndex >= numOfModels || llmIndex < 0) {
+                    if (numOfModels > 0) {
+                        llmIndex = 0;
+                        return;
+                    }
                     const provider = ollama ? 'Ollama' : 'OpenRouter';
                     await vscode.window.showErrorMessage(`No available models for ${provider}. Add LLMs using the 'Settings' icon on the webview.`);
                     return;
                 }
-                
+
+                sessions[currentSession].llmIndex = llmIndex;
                 this.postMessage('disableAsk');
                 currentlyResponding = true;
+
                 promptValue = "";
                 currentMentionedFiles = {};
 
+                sessions[currentSession].prompt = "";
+                sessions[currentSession].mentionedFiles = {};
+
                 let userQuestion = message.text;
                 userQuestions.push(userQuestion);
-                questionHistory.push(userQuestion);                
+                questionHistory.push(userQuestion);
                 writeToFile = message.writeToFile;
                 outputFileName = message.outputFile ? message.outputFile : "output";
 
-                this.postMessage('chat', { text: userQuestion });
-                if (writeToFile) sendToFile("## " + userQuestion + "\n\n", outputFileName);
+                sessions[currentSession].writeToFile = message.writeToFile;
+                sessions[currentSession].outputFileName = message.outputFile ? message.outputFile : "output";
+
+                if (sessions[currentSession].title == "New Chat") {
+                    setSessionTitle(sessions[currentSession], userQuestion);
+                    this.postMessage("updateTitle", { text: currentSession, value: sessions[currentSession].title });
+                }
+
+                this.postMessage('canDelete', { text: currentSession, value: false });
+                this.postMessage('chat', { text: userQuestion, value: textFromFile });
+                if (writeToFile) sendToFile("**" + userQuestion + "**\n\n", outputFileName);
 
                 let text = message.text;
                 for (const [index, info] of Object.entries(message.mentionedFiles)) {
@@ -882,15 +941,18 @@ class CodeNexusViewProvider {
                     text = replaceFileMentions(text, ["@" + file]);
                 }
 
-                this.loading();                
+                sessions[currentSession].fileHistory = fileHistory;
+
+                this.loading();
                 this.postMessage('content', { text: '' });
 
                 const messages = await generateMessages(message.text, textFromFile);
                 this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
-                textFromFile = "";
                 if (ollama) await sendChat(this, messages, this.ollamaChat, text, llmIndex, 0, userQuestion, ollamaModels, ollamaNames)
                 else await sendChat(this, messages, this.openChat, text, llmIndex, 0, userQuestion, openRouterModels, openRouterNames);
+                textFromFile = "";
                 this.postMessage('cancelView', { value: false });
+                this.postMessage('canDelete', { text: currentSession, value: true });
 
                 await updateQueuedChanges();
                 currentlyResponding = false;
@@ -899,20 +961,25 @@ class CodeNexusViewProvider {
                 await vscode.env.clipboard.writeText(message.text);
             } else if (message.command === "selectLLM") {
                 llmIndex = parseInt(message.index);
+                sessions[currentSession].llmIndex = llmIndex;
             } else if (message.command === 'remove') {
                 textFromFile = "";
             } else if (message.command === 'clearHistory') {
                 this.postMessage('history', { value: currentlyResponding });
-                questionsAndResponses = [];
+                sessions[currentSession].chats = [];
                 runnablePrograms = {};
             } else if (message.command === 'stopResponse') {
                 continueResponse = false;
                 this.postMessage('cancelView', { value: false });
             } else if (message.command === 'outputToFile') {
                 if (currentlyResponding) queuedChanges.push([message.command, message.checked]);
-                else writeToFile = message.checked;
+                else {
+                    writeToFile = message.checked;
+                    sessions[currentSession].writeToFile = writeToFile;
+                }
             } else if (message.command === 'fileContext') {
                 fileHistory.delete(message.key);
+                sessions[currentSession].fileHistory = fileHistory;
             } else if (message.command === 'runProgram') {
                 const file = runnablePrograms[message.key];
                 if (!file) return;
@@ -920,15 +987,20 @@ class CodeNexusViewProvider {
                 await runPythonFile(file);
             } else if (message.command === 'changeMode') {
                 if (currentlyResponding) queuedChanges.push([message.command, message.value]);
-                else agentMode = message.value == 'false' ? false : true;
+                else {
+                    agentMode = message.value == 'false' ? false : true;
+                    sessions[currentSession].agentMode = agentMode;
+                }
             } else if (message.command === 'updatePrompt') {
+                sessions[currentSession].prompt = message.value;
+                sessions[currentSession].mentionedFiles = message.files;
                 promptValue = message.value;
                 currentMentionedFiles = message.files;
             } else if (message.command === 'deleteEntry') {
-                const index = questionsAndResponses.findIndex((val) => val.key == message.key)
+                const index = sessions[currentSession].chats.findIndex((val) => val.key == message.key)
                 if (index == -1) return;
-                questionsAndResponses.splice(index, 1);
-                this.interactions = questionsAndResponses.length - 1;
+                sessions[currentSession].chats.splice(index, 1);
+                this.interactions = sessions[currentSession].chats.length - 1;
             } else if (message.command === 'openSettings') {
                 await vscode.commands.executeCommand("workbench.action.openSettings", "CodenexusAI")
             } else if (message.command === 'refreshFiles') {
@@ -937,7 +1009,7 @@ class CodeNexusViewProvider {
             } else if (message.command === 'updateApiKey') {
                 await vscode.commands.executeCommand('codenexus-ai.changeApiKey');
             } else if (message.command === 'copyResponse') {
-                const chatEntry = questionsAndResponses.find((val) => val.key == message.key);
+                const chatEntry = sessions[currentSession].chats.find((val) => val.key == message.key);
                 if (chatEntry === undefined) return;
                 await vscode.env.clipboard.writeText(chatEntry.response);
             } else if (message.command === 'mediaFolder') {
@@ -955,6 +1027,37 @@ class CodeNexusViewProvider {
                         message = e.message.substring(startIndex, e.message.length - 1);
                     }
                     await vscode.window.showErrorMessage(message || `Error opening file: ${message.location}`);
+                }
+            } else if (message.command === 'newSession') {
+                if (currentlyResponding) return;
+                const newSession = initializeNewSession(sessions, lruSize);
+                setGlobalVariables(newSession);
+                currentSession = newSession;
+                await this.updateHTML(false);
+            } else if (message.command === 'changeSession') {
+                if (currentlyResponding) return;
+                const sessionId = message.id;
+                setGlobalVariables(sessionId);
+                currentSession = sessionId;
+                await this.updateHTML(true);
+            } else if (message.command === 'deleteSession') {
+                const numOfSessions = Object.keys(sessions).length;
+                const deleteId = message.id;
+                if (currentlyResponding && deleteId == currentSession) return;
+                if (numOfSessions == 1) {
+                    delete sessions[deleteId];
+                    const newSession = initializeNewSession(sessions, lruSize);
+                    setGlobalVariables(newSession);
+                    currentSession = newSession;
+                    await this.updateHTML(false);
+                } else {
+                    delete sessions[deleteId];
+                    if (currentSession == deleteId) {
+                        const sessionIds = Object.keys(sessions);
+                        setGlobalVariables(sessionIds[0]);
+                        currentSession = sessionIds[0];
+                        await this.updateHTML(true);
+                    }
                 }
             }
         });
@@ -974,9 +1077,10 @@ class CodeNexusViewProvider {
 
     /**
      * Gets the HTML for the webview.
+     * @param {boolean} [showSidebar=false] - Boolean indicating if the sidebar should be visible.
      * @returns {Promise<string>} The webview HTML.
      */
-    async _getHtmlForWebview() {
+    async _getHtmlForWebview(showSidebar=false) {
         let names = ollama ? ollamaNames : openRouterNames;
         let optionsHtml = '';
         for (let i = 0; i < names.length; i++) {
@@ -984,12 +1088,52 @@ class CodeNexusViewProvider {
         }
 
         let chatHistoryHtml = '';
-        for (let i = 0; i < questionsAndResponses.length; i++) {
-            const response = await mdToHtml(questionsAndResponses[i].response.replaceAll(token, ""));
+        for (let i = 0; i < sessions[currentSession].chats.length; i++) {
+            const item = sessions[currentSession].chats[i];
+            const response = await mdToHtml(item.response.replaceAll(token, ""));
+            let snippetHtml = '';
+
+            if (item.snippet && item.snippet.trim() !== '') {
+                const sanitizedSnippet = sanitizeString(item.snippet);
+                snippetHtml = `
+                <br><br>
+                <details class="snippet-dropdown">
+                    <summary class="snippet-button">View Snippet</summary>
+                    <div class="snippet-content">
+                        <pre><code>${sanitizedSnippet}</code></pre>
+                    </div>
+                </details>
+            `;
+            }
+
             chatHistoryHtml += `
-                <div class="chat-entry" id="${questionsAndResponses[i].key}">
-                    <div class="question"><strong>You:</strong> ${highlightFilenameMentions(questionsAndResponses[i].question, fileTitles)}</div>
-                    <div class="response">${response}</div>
+            <div class="chat-entry" id="${item.key}">
+                <div class="question"><strong>
+                    You:</strong> ${highlightFilenameMentions(item.question, fileTitles)}
+                    ${snippetHtml}
+                </div>
+                <div class="response">
+                    ${response}
+                </div>
+            </div>
+        `;
+        }
+
+        let sessionsHTML = '';
+        const sessionKeys = Object.keys(sessions).sort((a, b) => Number(b) - Number(a));
+
+        for (const key of sessionKeys) {
+            const session = sessions[key];
+            const isActive = key == currentSession;
+            const title = sanitizeString(session.title);
+
+            sessionsHTML += `
+                <div class="session-item ${isActive ? 'active' : ''}" data-session-id="${key}" title="${title}">
+                    <span class="session-title">${title}</span>
+                    <button class="session-switch all-sessions" id="${key}" style="display: none;"></button>
+                    <button class="session-delete options" data-session-id="${key}" title="Delete Session">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
                 </div>
             `;
         }
@@ -1013,7 +1157,7 @@ class CodeNexusViewProvider {
         return /*html*/`
         <!DOCTYPE html>
         <html lang="en">
-          <head>
+        <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
@@ -1021,50 +1165,69 @@ class CodeNexusViewProvider {
             <link rel="stylesheet" href="${cssFile}">
             <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
             <title>CodeNexus</title>
-          </head>
-          <body>
-            <div id="chat-container">
-                <div id="input-area">
-                    <div id="context-files"></div>
-                    <textarea id="prompt" rows="3" placeholder="${placeholder}"></textarea>
-                    <div tabindex='-1' id="file-options"></div>
-                    <div class="options-container">
-                        <div id="llmDropdown">
-                            <label for="llmSelect">Select LLM:</label>
-                            <select id="llmSelect">
-                                ${optionsHtml}
+        </head>
+        <body class="${showSidebar ? 'sidebar-visible' : 'sidebar-hidden'}"> 
+            <div id="app-container">
+                
+                <div id="session-panel">
+                    <div class="session-panel-header">
+                        <button id="new-sessions" class="button-styling ask-chat">
+                            <i class="fas fa-plus"></i> New Chat
+                        </button>
+                    </div>
+                    <div id="session-list">
+                        ${sessionsHTML}
+                    </div>
+                </div>
+
+                <div id="chat-container">
+                    <div id="input-area">
+                        <div id="context-files"></div>
+                        
+                        <textarea id="prompt" rows="3" placeholder="${placeholder}"></textarea>
+                        <div tabindex='-1' id="file-options"></div>
+                        
+                        <div class="options-container">
+                            <div id="llmDropdown">
+                                <label for="llmSelect">Select LLM:</label>
+                                <select id="llmSelect">
+                                    ${optionsHtml}
+                                </select>
+                            </div>
+                            <select id="mode-select">
+                                ${llmModeOption}
                             </select>
                         </div>
-                        <select id="mode-select">
-                            ${llmModeOption}
-                        </select>
-                    </div>
 
-                    <div class="options-container">
-                        <div class="checkbox-button-container">
-                            <input type="checkbox" id="writeToFileCheckbox" class="checkbox-button-input" ${writeToFile ? 'checked' : ''}>
-                            <label for="writeToFileCheckbox" class="checkbox-button-label">
-                                <i class="fa-solid fa-xmark fa-xl icon-x"></i>
-                                <span class="label-text">Write to File</span>
-                            </label>
-                            <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
+                        <div class="options-container">
+                            <div class="checkbox-button-container">
+                                <input type="checkbox" id="writeToFileCheckbox" class="checkbox-button-input" ${writeToFile ? 'checked' : ''}>
+                                <label for="writeToFileCheckbox" class="checkbox-button-label">
+                                    <i class="fa-solid fa-xmark fa-xl icon-x"></i>
+                                    <span class="label-text">Write to File</span>
+                                </label>
+                                <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
+                            </div>
+                            
+                            <button title="Chat Sessions" class="options" id="toggle-sidebar-btn"><i class="fa-regular fa-pen-to-square"></i></button>
+                            <button title="Clear History" class="options" id="clear-history"><i class="fas fa-solid fa-trash-can icon"></i></button>
+                            <button title="Refresh Files" class="options" id="refresh-files"><i class="fas fa-solid fa-sync-alt icon"></i></button>
+                            <button title="Open Media Folder" class="options" id="media-folder"><i class="fa-solid fa-images icon"></i></button>
+                            <button title="Update API Key" class="options" id="api-key"><i class="fas fa-key icon"></i></button>
+                            <button title="Settings" class="options" id="open-settings"><i class="fas fa-cog icon"></i></button>
                         </div>
-                        <button title="Clear History" class="options" id="clear-history"><i class="fas fa-solid fa-trash-can icon"></i></button>
-                        <button title="Refresh Files" class="options" id="refresh-files"><i class="fas fa-solid fa-sync-alt icon"></i></button>
-                        <button title="Open Media Folder" class="options" id="media-folder"><i class="fa-solid fa-images icon"></i></button>
-                        <button title="Update API Key" class="options" id="api-key"><i class="fas fa-key icon"></i></button>
-                        <button title="Settings" class="options" id="open-settings"><i class="fas fa-cog icon"></i></button>
+                        
+                        <div id="content"></div>
+                        <button class="button-styling ask-chat" id="ask">Ask</button>
                     </div>
-                    
-                    <div id="content"></div>
-                    <button class="button-styling ask-chat" id="ask">Ask</button>
-                </div>
-                <div id="chat-history">
-                    ${chatHistoryHtml}
+                    <div id="chat-history">
+                        ${chatHistoryHtml}
+                    </div>
                 </div>
             </div>
+
             <script nonce="${nonce}" src="${jsFile}"></script>
-          </body>
+        </body>
         </html>
         `;
     }

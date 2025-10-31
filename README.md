@@ -34,6 +34,12 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 - **Conversation Management**:
   - Message history retention.
   - One-click conversation reset.
+- **Chat Sessions**:
+  - Create and switch between multiple independent conversations.
+  - Each session maintains its own context and conversation history.
+- **Code Snippet Management**:
+  - Add code snippets to your chat question using keyboard shortcuts.
+  - View and review all added snippets before sending your query.
 - **Image Generation**
   - Allows the viewing and creation of images with compatible LLMs.
   - Saves the generated image locally.
@@ -70,6 +76,17 @@ code --install-extension codenexus-ai-*.vsix
 1. Open the extension from the activity bar.
 2. Use `@filename` to reference files in your working directory.
 3. Highlight code + Ctrl/K for instant context.
+
+### Chat Sessions
+1. Switch/create sessions using the sidebar by clicking the "Chat Sessions" button.
+2. Click the "+" button to create a new chat session.
+3. Your context and conversation history are preserved for each session.
+
+### Code Context Preview
+1. Highlight code in your editor and press `Ctrl+K/Cmd+K` to add it to your chat question.
+2. Added snippets appear in the context preview panel below the input field.
+3. View, review, or remove any added snippets before sending your query.
+4. The conversation history will show the snippets in a dropdown within your question.
 
 ### Agent Mode
 ![Agent Mode Demo](https://i.imgur.com/M7msv9H.png)

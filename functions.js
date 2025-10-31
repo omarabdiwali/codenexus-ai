@@ -258,6 +258,58 @@ const runPythonFile = async (text) => {
 }
 
 /**
+ * Sanitizes a string to be safely inserted into HTML.
+ * @param {string} str The string to sanitize.
+ * @returns {string} The sanitized string.
+ */
+const sanitizeString = (str) => {
+    if (!str) return "";
+    return str.replace(/[&<>"']/g, function(match) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[match];
+    });
+}
+
+/**
+ * Creates a new session, and initializes the fields to their default values.
+ * @param {Object} sessions - All of the chat sessions.
+ * @param {number} lruSize - The LRU size for `fileHistory`.
+ * @returns {number} The unique session ID.
+ */
+const initializeNewSession = (sessions, lruSize) => {
+    const newSession = new Date().getTime();
+    sessions[newSession] = {};
+    sessions[newSession].prompt = '';
+    sessions[newSession].mentionedFiles = {};
+    sessions[newSession].writeToFile = false;
+    sessions[newSession].agentMode = false;
+    sessions[newSession].llmIndex = 0;
+    sessions[newSession].outputFileName = "output";
+    sessions[newSession].fileHistory = new LRUCache(lruSize);
+    sessions[newSession].title = "New Chat";
+    sessions[newSession].chats = [];
+    return newSession;
+}
+
+/**
+ * Sets the session's title based on the initial question asked.
+ * @param {Object} session - The current chat session.
+ * @param {string} question - The question the user asked.
+ */
+const setSessionTitle = (session, question) => {
+    if (session.title == "New Chat" && question) {
+        title = question.split('\n')[0];
+        if (title.trim() === "") { title = "Chat"; }
+        session.title = sanitizeString(title);
+    }
+}
+
+/**
  * An LRUCache that is used for handling the number of files for context.
  */
 class LRUCache {
@@ -369,5 +421,8 @@ module.exports = {
     getRandomString,
     getAllRunnablePrograms,
     runPythonFile,
+    sanitizeString,
+    initializeNewSession,
+    setSessionTitle,
     LRUCache
 }

@@ -14,6 +14,11 @@ const settings = document.getElementById('open-settings');
 const refreshFiles = document.getElementById('refresh-files');
 const updateKey = document.getElementById('api-key');
 const openMediaFolder = document.getElementById('media-folder');
+const newSessions = document.getElementById('new-sessions');
+const sessionList = document.getElementById('session-list');
+const toggleBtn = document.getElementById('toggle-sidebar-btn');
+const sessionPanel = document.getElementById('session-panel');
+const body = document.body;
 const regEx = new RegExp(/\B@(?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_-]+)/g);
 
 let maxFiles = 3;
@@ -206,7 +211,7 @@ const updateMentionedFiles = () => {
     while ((match = regEx.exec(value)) != null) {
         const key = match.index;
         const filename = match[0].substring(1);
-        const keyExists = key in mentionedFiles && mentionedFiles[key][0] == filename; 
+        const keyExists = key in mentionedFiles && mentionedFiles[key][0] == filename;
         const isValidFile = keyExists && filename in fileTitlesWithLocations && fileTitlesWithLocations[filename].includes(mentionedFiles[key][1]);
 
         if (isValidFile) {
@@ -246,7 +251,7 @@ const updateContextFiles = () => {
         const [filename, location] = fileDetails;
         createContextedFileElement(filename, location, 'temp-mention');
     }
-    
+
     showContextFiles();
 }
 
@@ -304,7 +309,7 @@ const addContextedFiles = () => {
             contextFileElements.put(location, filename);
         }
     }
-    
+
     updateMentionedFiles();
 
     for (const [key, fileDetails] of Object.entries(mentionedFiles)) {
@@ -317,12 +322,30 @@ const addContextedFiles = () => {
 }
 
 /**
+ * Sanitizes a string to be safely inserted into HTML.
+ * @param {string} str The string to sanitize.
+ * @returns {string} The sanitized string.
+ */
+const sanitizeString = (str) => {
+    if (!str) return "";
+    return str.replace(/[&<>"']/g, function (match) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[match];
+    });
+}
+
+/**
  * Formats user questions for the chat history by highlighting '@mentioned' files.
  * @param {string} text - The text to format.
  * @returns {string} The formatted text with highlighted mentions.
  */
 const formatUserQuestion = (text) => {
-    text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>');
+    text = sanitizeString(text).replaceAll('\n', '<br>');
     return text.replace(regEx, (match) => {
         const title = match.substring(1);
         if (!(title in fileTitlesWithLocations)) return match;
@@ -411,7 +434,7 @@ const generateChatEntryButtons = (element, key) => {
     const buttonDiv = document.createElement('div');
     const copyButton = generateCopyButton(key, 'response-button');
     const deleteButton = generateDeleteButton(element, key);
-    
+
     buttonDiv.classList.add("code-container-buttons");
     buttonDiv.appendChild(copyButton);
     buttonDiv.appendChild(deleteButton);
@@ -531,53 +554,41 @@ const addButtons = () => {
 highlightAllCodeBlocks();
 addButtons();
 
-llmSelect.addEventListener('change', () => {
-    const selectedIndex = llmSelect.value;
-    vscode.postMessage({ command: 'selectLLM', index: selectedIndex });
-});
-
-llmMode.addEventListener('change', (e) => {
-    vscode.postMessage({ command: 'changeMode', value: llmMode.value });
-})
-
-outputFileNameInput.addEventListener("input", (e) => {
-    let val = e.target.value;
-    let filteredValue = val.replace(/[^a-zA-Z0-9]/g, '');
-    e.target.value = filteredValue;
-})
-
-/**
- * Toggles output filename input based on checkbox state.
- * @param {Event} e - The event object.
- */
-const handleDisable = (e) => {
-    e.preventDefault();
-    outputFileNameInput.disabled = !writeToFileCheckbox.checked;
-    vscode.postMessage({ command: 'outputToFile', checked: writeToFileCheckbox.checked });
-};
-
-writeToFileCheckbox.addEventListener('change', handleDisable);
-
 /**
  * Appends a new user question to chat history, and creates a div for the response.
  * @param {string} question - The user's question.
+ * @param {string} codeSnippet - The user's additional code snippet.
  */
-const appendToChat = (question) => {
+const appendToChat = (question, codeSnippet) => {
     const chatEntry = document.createElement('div');
     chatEntry.classList.add('chat-entry');
 
-    if (question.length > 0) {
-        const questionDiv = document.createElement('div');
-        questionDiv.classList.add('question');
-        questionDiv.innerHTML = '<strong>You: </strong>' + formatUserQuestion(question);
-        chatEntry.appendChild(questionDiv);
+    let snippetHtml = '';
+
+    if (codeSnippet && codeSnippet.trim() !== '') {
+        const sanitizedSnippet = sanitizeString(codeSnippet);
+
+        snippetHtml = `
+            <br><br>
+            <details class="snippet-dropdown">
+                <summary class="snippet-button">View Snippet</summary>
+                <div class="snippet-content">
+                    <pre><code>${sanitizedSnippet}</code></pre>
+                </div>
+            </details>
+        `;
     }
+
+    const questionDiv = document.createElement('div');
+    questionDiv.classList.add('question');
+    questionDiv.innerHTML = '<strong>You: </strong>' + formatUserQuestion(question) + snippetHtml;
+    chatEntry.appendChild(questionDiv);
 
     const responseDiv = document.createElement('div');
     responseDiv.classList.add('response');
     responseDiv.innerHTML = "";
-    chatEntry.appendChild(responseDiv);
 
+    chatEntry.appendChild(responseDiv);
     responseArea.appendChild(chatEntry);
     responseArea.scrollTop = responseArea.scrollHeight;
 }
@@ -681,7 +692,7 @@ const replaceCursorWord = (start, fileInfo) => {
     if (!wordChange) return;
 
     const endIndex = startIndex + wordChange.length;
-    const addWord = value.substring(0, startIndex+1) + word;
+    const addWord = value.substring(0, startIndex + 1) + word;
     const cursorPosition = addWord.length;
 
     prompt.value = addWord + value.substring(endIndex);
@@ -703,7 +714,7 @@ const replaceCursorWord = (start, fileInfo) => {
  * @returns {HTMLDivElement} The search item element.
  */
 const createSearchItem = (file, value, idx, total) => {
-    if (!baseWorkspacePath) return;
+    if (!baseWorkspacePath) return null;
     const item = document.createElement('div');
     const location = value.substring(baseWorkspacePath.length + 1);
 
@@ -810,13 +821,13 @@ const showFileOptions = (string) => {
 
     for (const [filename, location] of orderedOptions) {
         const row = createSearchItem(filename, location, idx, totalLength);
+        if (row == null) continue;
         idx += 1;
         fileSearch.appendChild(row);
     }
 
     fileSearch.style.display = 'flex';
 };
-
 
 /**
  * Calculates the Levenshtein distance between two strings.
@@ -850,10 +861,10 @@ const levenDist = (a, b) => {
  * @returns {string} The normalized string.
  */
 const normalizeString = (str) => {
-  return str
-    .replace(/\s+/g, ' ')
-    .replace(/^\s+|\s+$/g, '')
-    .replace(/\r\n|\r/g, '\n');
+    return str
+        .replace(/\s+/g, ' ')
+        .replace(/^\s+|\s+$/g, '')
+        .replace(/\r\n|\r/g, '\n');
 }
 
 /**
@@ -862,12 +873,12 @@ const normalizeString = (str) => {
  * @returns {string} The escaped string.
  */
 const escapeString = (str) => {
-  return str
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t');
+    return str
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t');
 }
 
 /**
@@ -900,6 +911,49 @@ const generateLLMDropdownValues = (names, index) => {
     }
     llmSelect.value = index;
 }
+
+/**
+ * Validates the listed `sessionItems` and updates their titles.
+ * @param {Object<string,string>} sessions - An Object that links sessionIds with their titles.
+ * @param {string | number} currentSession - The current sessionId.
+ */
+const updateSessionTitles = (sessions, currentSession) => {
+    const sessionItems = document.querySelectorAll('div[data-session-id]');
+    for (const sessionItem of sessionItems) {
+        const sessionId = sessionItem.getAttribute('data-session-id');
+        if (sessionId in sessions) {
+            sessionItem.title = sessions[sessionId];
+            const sessionTitle = sessionItem.querySelector('.session-title');
+            if (!sessionTitle) continue;
+            sessionTitle.innerText = sessions[sessionId];
+            if (sessionId == currentSession) sessionItem.classList.add('active');
+            else sessionItem.classList.remove('active');
+        } else {
+            sessionItem.remove();
+        }
+    }
+}
+
+llmSelect.addEventListener('change', () => {
+    const selectedIndex = llmSelect.value;
+    vscode.postMessage({ command: 'selectLLM', index: selectedIndex });
+});
+
+llmMode.addEventListener('change', (e) => {
+    vscode.postMessage({ command: 'changeMode', value: llmMode.value });
+})
+
+outputFileNameInput.addEventListener("input", (e) => {
+    let val = e.target.value;
+    let filteredValue = val.replace(/[^a-zA-Z0-9]/g, '');
+    e.target.value = filteredValue;
+})
+
+writeToFileCheckbox.addEventListener('change', (e) => {
+    e.preventDefault();
+    outputFileNameInput.disabled = !writeToFileCheckbox.checked;
+    vscode.postMessage({ command: 'outputToFile', checked: writeToFileCheckbox.checked });
+});
 
 clearHistory.addEventListener("click", () => {
     vscode.postMessage({ command: 'clearHistory' });
@@ -963,6 +1017,55 @@ ask.addEventListener("click", () => {
     }
 });
 
+newSessions.addEventListener('click', () => {
+    vscode.postMessage({ command: 'newSession' });
+})
+
+sessionList.addEventListener('click', (e) => {
+    const target = e.target;
+    const deleteBtn = target.closest('.session-delete');
+
+    if (deleteBtn) {
+        e.stopPropagation();
+        const sessionId = deleteBtn.dataset.sessionId;
+        const sessionItem = target.closest('.session-item');
+        vscode.postMessage({
+            command: 'deleteSession',
+            id: sessionId
+        })
+
+        if (sessionItem) sessionItem.remove();
+        return;
+    }
+
+    const sessionItem = target.closest('.session-item');
+    if (sessionItem) {
+        const switchBtn = sessionItem.querySelector('.all-sessions');
+        if (switchBtn && !sessionItem.classList.contains('active')) {
+            vscode.postMessage({
+                command: 'changeSession',
+                id: switchBtn.id
+            });
+        }
+    }
+});
+
+toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    body.classList.toggle('sidebar-visible');
+    body.classList.toggle('sidebar-hidden');
+});
+
+document.addEventListener('click', (e) => {
+    if (body.classList.contains('sidebar-visible')) {
+        const target = e.target;
+        if (!sessionPanel.contains(target)) {
+            body.classList.remove('sidebar-visible');
+            body.classList.add('sidebar-hidden');
+        }
+    }
+})
+
 window.addEventListener("message", (e) => {
     const { command, text, value, key } = e.data;
 
@@ -981,7 +1084,8 @@ window.addEventListener("message", (e) => {
         responseArea.lastElementChild.querySelector('.response').innerText = text;
         generateChatEntryButtons(responseArea.lastElementChild, key);
     } else if (command == 'chat') {
-        appendToChat(text);
+        appendToChat(text, value);
+        highlightNewCodeBlocks();
     } else if (command == 'focus') {
         prompt.focus();
     } else if (command == 'content') {
@@ -1018,14 +1122,16 @@ window.addEventListener("message", (e) => {
         prompt.value = text;
         mentionedFiles = value;
     } else if (command == 'updateValues') {
-        const [toFile, agent, index, fileSize] = value;
+        const [toFile, agent, index, fileSize, outputFileName, sessions, currentSession] = value;
         writeToFileCheckbox.checked = toFile;
         outputFileNameInput.disabled = !writeToFileCheckbox.checked;
+        outputFileNameInput.value = outputFileName == "output" ? "" : outputFileName;
         llmMode.value = `${agent}`;
         llmSelect.value = index;
         maxFiles = fileSize;
         contextFileElements.changeSize(maxFiles);
         prompt.placeholder = `Type your message here, with @file.ext to mention files (max ${maxFiles}), and using tab to select the correct one...`;
+        updateSessionTitles(sessions, currentSession);
     } else if (command == 'configUpdate') {
         if (key == "models") generateLLMDropdownValues(value.names, value.index);
         else if (key == "fileSize") {
@@ -1033,5 +1139,18 @@ window.addEventListener("message", (e) => {
             contextFileElements.changeSize(maxFiles);
             prompt.placeholder = `Type your message here, with @file.ext to mention files (max ${maxFiles}), and using tab to select the correct one...`;
         }
+    } else if (command == 'canDelete') {
+        const sessionItem = document.querySelector(`div[data-session-id="${text}"]`);
+        if (!sessionItem) return;
+        const deleteButton = sessionItem.querySelector('.session-delete');
+        if (!deleteButton) return;
+        deleteButton.style.display = value ? 'block' : 'none';
+    } else if (command == 'updateTitle') {
+        const sessionItem = document.querySelector(`div[data-session-id="${text}"]`);
+        if (!sessionItem) return;
+        const sessionTitle = sessionItem.querySelector('.session-title');
+        if (!sessionTitle) return;
+        sessionItem.title = value;
+        sessionTitle.innerText = value;
     }
 });

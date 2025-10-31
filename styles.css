@@ -214,7 +214,7 @@ pre code.hljs {
   outline: none;
   border-color: var(--vscode-focusBorder);
 }
-#content {
+#content, .snippet-dropdown {
     max-height: 40vh !important;
     overflow-x: auto !important;
     overflow-y: auto !important;
@@ -396,4 +396,97 @@ pre code.hljs {
 }
 .label-text {
     color: var(--vscode-dropdown-foreground);
+}
+.snippet-button {
+    cursor: pointer;
+}
+.snippet-dropdown::-webkit-scrollbar {
+    display: none !important;
+}
+.snippet-dropdown {
+    scrollbar-width: none;
+    overscroll-behavior-y: contain;
+}
+body, html {
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: 100%;
+}
+#app-container {
+    position: relative;
+    height: 100%;
+}
+#chat-container {
+    width: 100%;
+    height: 100%;
+    padding: 0px 5px;
+}
+#session-panel {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 35vw;
+    height: 100vh;
+    z-index: 10;
+    background-color: var(--vscode-sideBar-background);
+    border-right: 1px solid var(--vscode-editor-background);
+    transform: translateX(-100%); 
+    transition: transform 0.3s ease-in-out;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5);
+}
+.sidebar-visible #session-panel {
+    transform: translateX(0);
+}
+.sidebar-hidden #session-panel {
+    transform: translateX(-100%);
+}
+.session-panel-header {
+    padding: 10px;
+    border-bottom: 1px solid var(--vscode-editor-background);
+}
+.session-panel-header #new-sessions {
+    width: 100%;
+    text-align: left;
+    padding: 8px 12px;
+}
+.session-panel-header #new-sessions .fa-plus {
+    margin-right: 8px;
+}
+#session-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+.session-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--vscode-editor-background);
+    user-select: none;
+}
+.session-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 10px;
+}
+.session-item:hover {
+    background-color: var(--vscode-list-hoverBackground, var(--vscode-editor-background));
+}
+.session-item.active {
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+.session-item.active .session-delete {
+    color: var(--vscode-list-activeSelectionForeground);
+}
+.session-delete {
+    display: block; 
+    margin-bottom: 0; 
+    margin-left: auto;
 }
