@@ -293,6 +293,7 @@ const initializeNewSession = (sessions, lruSize) => {
     sessions[newSession].fileHistory = new LRUCache(lruSize);
     sessions[newSession].title = "New Chat";
     sessions[newSession].chats = [];
+    sessions[newSession].files = [];
     return newSession;
 }
 

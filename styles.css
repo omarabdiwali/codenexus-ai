@@ -200,6 +200,7 @@ pre code.hljs {
 }
 #prompt {
     width: 100%;
+    max-height: 20vh;
     box-sizing: border-box;
     border: 1px solid var(--vscode-input-border);
     background-color: var(--vscode-input-background);
@@ -214,7 +215,7 @@ pre code.hljs {
   outline: none;
   border-color: var(--vscode-focusBorder);
 }
-#content, .snippet-dropdown {
+#content, .snippet-dropdown, #files-dropdown {
     max-height: 40vh !important;
     overflow-x: auto !important;
     overflow-y: auto !important;
@@ -252,8 +253,9 @@ pre code.hljs {
     display: flex;
     align-items: center;
 }
-.options-container > button:first-of-type {
+#file-label {
     margin-left: auto;
+    margin-right: 6px;
 }
 .button-styling {
     width: 100%;
@@ -403,7 +405,7 @@ pre code.hljs {
 .snippet-dropdown::-webkit-scrollbar {
     display: none !important;
 }
-.snippet-dropdown {
+.snippet-dropdown, #files-dropdown {
     scrollbar-width: none;
     overscroll-behavior-y: contain;
 }
@@ -489,4 +491,58 @@ body, html {
     display: block; 
     margin-bottom: 0; 
     margin-left: auto;
+}
+#file-input {
+    display: none;
+}
+.file-item {
+    position: relative;
+    width: 60px;
+    height: 60px;
+}
+.file-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; 
+    border-radius: 5px;
+    border: 1px solid var(--vscode-input-border);
+}
+.delete-btn {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 16px;
+    text-align: center;
+    cursor: pointer;
+    padding: 0;
+    user-select: none;
+}
+.delete-btn:hover {
+    background-color: var(--vscode-button-hoverBackground);
+    color: var(--vscode-errorForeground, #f48771);
+}
+#files-dropdown {
+    display: none;
+    margin-bottom: 10px;
+}
+#preview-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 5px;
+    flex-shrink: 0;
+    min-height: 0;
+    background-color: var(--vscode-input-background);
+    border-radius: var(--border-radius-size);
+    max-height: 150px;
+    overflow-y: auto;
 }

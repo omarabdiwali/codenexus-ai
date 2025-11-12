@@ -6,7 +6,7 @@
     "type": "git",
     "url": "https://github.com/omarabdiwali/codenexus-ai.git"
   },
-  "version": "2.0.0",
+  "version": "2.1.0",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -23,6 +23,11 @@
         "command": "codenexus-ai.openChatWithSelection",
         "key": "ctrl+k",
         "mac": "cmd+k"
+      },
+      {
+        "command": "codenexus-ai.addToChatSelection",
+        "key": "ctrl+shift+k",
+        "mac": "cmd+shift+k"
       }
     ],
     "viewsContainers": {

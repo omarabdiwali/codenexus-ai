@@ -27,7 +27,8 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 - **Code Context Awareness**:
   - `@filename` syntax with auto-complete.
   - LRU cached file context.
-  - Highlight-to-chat integration (Ctrl+K/Cmd+K).
+  - Highlight-to-chat integration (`Ctrl+K/Cmd+K`).
+    - Hold `Shift` to append to existing content instead of replacing it.
 - **Agent Mode**: 
   - Intelligent Python program generation and validation.
   - Real-time code execution with safety checks.
@@ -40,6 +41,10 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 - **Code Snippet Management**:
   - Add code snippets to your chat question using keyboard shortcuts.
   - View and review all added snippets before sending your query.
+- **File & Image Attachment Support**:
+  - Upload and attach any files using the '+' icon in the webview.
+  - Now supports human-created images and documents in chat sessions.
+  - Generated images can be viewed directly in the chat interface.
 - **Image Generation**
   - Allows the viewing and creation of images with compatible LLMs.
   - Saves the generated image locally.

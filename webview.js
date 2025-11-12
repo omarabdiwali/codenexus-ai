@@ -18,6 +18,10 @@ const newSessions = document.getElementById('new-sessions');
 const sessionList = document.getElementById('session-list');
 const toggleBtn = document.getElementById('toggle-sidebar-btn');
 const sessionPanel = document.getElementById('session-panel');
+const fileInput = document.getElementById('file-input');
+const previewContainer = document.getElementById('preview-container');
+const filesDropdown = document.getElementById('files-dropdown');
+const filesDropdownButton = document.getElementById('files-dropdown-button');
 const body = document.body;
 const regEx = new RegExp(/\B@(?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_-]+)/g);
 
@@ -29,6 +33,7 @@ let fileTitlesWithLocations = {};
 let mentionedFiles = {};
 let contextedFilesStorage = [];
 let queue = [];
+let storedFiles = [];
 let lastMatching = 0;
 let alreadyMatched = {};
 let autocompleteUsed = false;
@@ -71,6 +76,134 @@ class LRUCache {
 }
 
 const contextFileElements = new LRUCache(maxFiles);
+
+/**
+ * Helper function to create a unique identifier for a file.
+ * @param {File} file - The targeted file.
+ * @returns {string} The unique file key.
+ */
+const getFileKey = (file) => {
+    return `${file.name}-${file.size}-${file.lastModified}`;
+};
+
+/**
+ * Renders the previews for the stored files.
+ */
+const renderPreviews = () => {
+    sendStoredFiles();
+    previewContainer.innerHTML = "";
+    
+    storedFiles.forEach((file, i) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            
+            const img = document.createElement('img');
+            img.src = reader.result;
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.textContent = 'x';
+            deleteBtn.onclick = (e) => {
+                e.preventDefault();
+                const index = storedFiles.findIndex((f) => getFileKey(f) == getFileKey(file));
+                index != -1 && index < storedFiles.length && storedFiles.splice(index, 1);
+                fileItem.remove();
+                sendStoredFiles();
+                if (storedFiles.length == 0) {
+                    filesDropdown.style.display = "none";
+                } else {
+                    filesDropdownButton.innerText = `Files (${storedFiles.length})`;
+                }
+            }
+
+            fileItem.appendChild(img);
+            fileItem.appendChild(deleteBtn);
+            previewContainer.appendChild(fileItem);
+        }
+
+        reader.readAsDataURL(file);
+    })
+
+    if (filesDropdown.style.display == 'block') {
+        if (storedFiles.length == 0) {
+            filesDropdown.style.display = 'none';
+        } else {
+            filesDropdownButton.innerText = `Files (${storedFiles.length})`;
+        }
+    } else {
+        if (storedFiles.length > 0) {
+            filesDropdown.style.display = 'block';
+            filesDropdownButton.innerText = `Files (${storedFiles.length})`;
+        }
+    }
+}
+
+/**
+ * Translates and sends the stored files to the backend using `vscode.postMessage`.
+ */
+const sendStoredFiles = () => {
+    const filePromises = storedFiles.map(file => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const base64Content = event.target.result;
+                resolve({
+                    name: file.name,
+                    type: file.type,
+                    lastModified: file.lastModified,
+                    content: base64Content
+                });
+            };
+
+            reader.onerror = (error) => reject(error);
+            reader.readAsDataURL(file); 
+        });
+    });
+
+    Promise.all(filePromises)
+        .then(serializableFiles => {
+            vscode.postMessage({
+                command: 'attachments',
+                files: serializableFiles
+            });
+        })
+        .catch(error => {
+            vscode.postMessage({ command: 'error', message: 'Failed to process files.' });
+        });
+};
+
+/**
+ * Converts file data (with binary content, e.g., Base64 or ArrayBuffer) 
+ * received from the extension back into browser-compatible File objects.
+ * @param {Array} serializableFiles - Array of objects containing file metadata and content.
+ * @returns {Array} Array of browser File objects.
+ */
+const revertFilesFromExtension = (serializableFiles) => {
+    if (!serializableFiles || serializableFiles.length === 0) {
+        return [];
+    }
+
+    const reconstructedFiles = serializableFiles.map(fileData => {
+        const { name, type, lastModified, content } = fileData;
+        const base64Parts = content.split(',');
+        const rawBase64 = base64Parts.length > 1 ? base64Parts[1] : base64Parts[0];
+        const binary = atob(rawBase64); 
+        const arrayBuffer = new ArrayBuffer(binary.length);
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        for (let i = 0; i < binary.length; i++) {
+            uint8Array[i] = binary.charCodeAt(i);
+        }
+
+        const blob = new Blob([uint8Array], { type: type });
+        const file = new File([blob], name, { type: type, lastModified: lastModified });
+        return file;
+    });
+
+    return reconstructedFiles;
+}
 
 /**
  * Creates a div element showing context file count (current/total).
@@ -1066,6 +1199,20 @@ document.addEventListener('click', (e) => {
     }
 })
 
+fileInput.addEventListener('change', (e) => {
+    const incomingFiles = Array.from(e.target.files);
+    const storedKeys = storedFiles.map(getFileKey);
+    const uniqueFiles = incomingFiles.filter(newFile => {
+        const newFileKey = getFileKey(newFile);
+        return !storedKeys.includes(newFileKey);
+    });
+
+    if (uniqueFiles.length == 0) return;
+    storedFiles = [...storedFiles, ...uniqueFiles];
+    renderPreviews();
+    e.target.value = "";
+})
+
 window.addEventListener("message", (e) => {
     const { command, text, value, key } = e.data;
 
@@ -1122,7 +1269,7 @@ window.addEventListener("message", (e) => {
         prompt.value = text;
         mentionedFiles = value;
     } else if (command == 'updateValues') {
-        const [toFile, agent, index, fileSize, outputFileName, sessions, currentSession] = value;
+        const [toFile, agent, index, fileSize, outputFileName, sessions, currentSession, savedFiles] = value;
         writeToFileCheckbox.checked = toFile;
         outputFileNameInput.disabled = !writeToFileCheckbox.checked;
         outputFileNameInput.value = outputFileName == "output" ? "" : outputFileName;
@@ -1132,6 +1279,8 @@ window.addEventListener("message", (e) => {
         contextFileElements.changeSize(maxFiles);
         prompt.placeholder = `Type your message here, with @file.ext to mention files (max ${maxFiles}), and using tab to select the correct one...`;
         updateSessionTitles(sessions, currentSession);
+        storedFiles = revertFilesFromExtension(savedFiles);
+        renderPreviews();
     } else if (command == 'configUpdate') {
         if (key == "models") generateLLMDropdownValues(value.names, value.index);
         else if (key == "fileSize") {

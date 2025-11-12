@@ -47,6 +47,7 @@ let textFromFile = "";
 let promptValue = "";
 let currentMentionedFiles = {};
 let locationOfMentionedFiles = [];
+let attachments = [];
 
 let llmIndex = 0;
 let writeToFile = false;
@@ -120,6 +121,7 @@ const setGlobalVariables = (sessionId) => {
     writeToFile = sessions[sessionId].writeToFile;
     agentMode = sessions[sessionId].agentMode;
     outputFileName = sessions[sessionId].outputFileName;
+    attachments = sessions[sessionId].files;
 
     const currentModels = ollama ? ollamaModels : openRouterModels;
     llmIndex = Math.min(sessions[sessionId].llmIndex, currentModels.length - 1);
@@ -361,12 +363,27 @@ const sendStream = async (provider, stream, final=false, key=null) => {
  * @param {Array} messages - The messages array, showing the conversation.
  * @param {string} role - The role (user/assistant/system).
  * @param {string} text - The message text.
+ * @param {boolean} [addFiles=false] - Add files to the message.
  */
-const addMessage = (messages, role, text) => {
-    messages.push({
-        role,
-        content: [{ type: "text", text }]
-    })
+const addMessage = (messages, role, text, addFiles) => {
+    if (addFiles) {
+        const content = [{ type: "text", text }];
+        for (const file of attachments) {
+            content.push({
+                type: "image_url",
+                image_url: {
+                    url: file.content,
+                    detail: "low"
+                }
+            })
+        }
+        messages.push({ role, content });
+    } else {
+        messages.push({
+            role,
+            content: [{ type: "text", text }]
+        })
+    }
 }
 
 /**
@@ -380,7 +397,7 @@ const addImageToMessage = (messages, imageData, imageType, match) => {
     const lastMessage = messages.at(-1);
     const imageObj = {
         type: "image_url",
-        imageUrl: {
+        image_url: {
             url: `data:image/${imageType};base64,${imageData}`,
             detail: "low"
         }
@@ -431,7 +448,7 @@ const generateMessages = async (chat, mentionedCode) => {
         parseResponseForImages(systemResponse, messages);
     }
 
-    addMessage(messages, 'user', completeMessage);
+    addMessage(messages, 'user', completeMessage, true);
     return messages;
 }
 
@@ -594,6 +611,7 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
         } else {
             index += 1;
             index %= models.length;
+            vscode.window.showInformationMessage(`Switching to ${names[index]}...`);
             await sendChat(provider, messages, openChat, chat, index, count + 1, originalQuestion, models, names);
         }
     }
@@ -654,7 +672,7 @@ async function activate(context) {
         if (provider) {
             if (!provider._view) await vscode.commands.executeCommand('workbench.view.extension.codenexus-ai-view');
             provider.show();
-            await provider.handleIncomingData(data);
+            await provider.handleIncomingData(data.text, data.addition);
         } else {
             vscode.window.showWarningMessage("Chat view provider not available yet.");
         }
@@ -663,8 +681,14 @@ async function activate(context) {
     const openChatShortcut = vscode.commands.registerCommand('codenexus-ai.openChatWithSelection', async () => {
         const editor = vscode.window.activeTextEditor;
         const text = editor ? editor.document.getText(editor.selection) : "";
-        await vscode.commands.executeCommand('codenexus-ai.chat.focus', text);
+        await vscode.commands.executeCommand('codenexus-ai.chat.focus', { text, addition: false });
     });
+
+    const addToChatSelection = vscode.commands.registerCommand('codenexus-ai.addToChatSelection', async () => {
+        const editor = vscode.window.activeTextEditor;
+        const text = editor ? editor.document.getText(editor.selection) : "";
+        await vscode.commands.executeCommand('codenexus-ai.chat.focus', { text, addition: true })
+    })
 
     vscode.workspace.onDidChangeConfiguration(async (event) => {
         if (event.affectsConfiguration("CodenexusAI")) {
@@ -676,7 +700,8 @@ async function activate(context) {
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(CodeNexusViewProvider.viewType, provider),
         changeApiKeyCommand,
-        openChatShortcut
+        openChatShortcut,
+        addToChatSelection
     );
 
     fileTitles = await getAllFiles(include, exclude, defaultInclude, defaultExclude);
@@ -734,9 +759,10 @@ class CodeNexusViewProvider {
     /**
      * Handles incoming data to the webview.
      * @param {string} data - The incoming data.
+     * @param {boolean} addition - If `data` should be added to `textFromFile`, or replace it.
      * @returns {Promise<void>}
      */
-    async handleIncomingData(data) {
+    async handleIncomingData(data, addition) {
         if (!data) {
             this.postMessage('focus');
             return;
@@ -744,8 +770,9 @@ class CodeNexusViewProvider {
 
         let trimmed = data.replaceAll("\n", "").replaceAll(" ", "");
         if (trimmed.length > 0) {
-            textFromFile = data;
-            let htmlText = await mdToHtml("```\n" + data + "\n```");
+            if (!textFromFile) textFromFile = data;
+            else textFromFile = addition ? textFromFile + '\n\n' + data : data;
+            let htmlText = await mdToHtml("````\n" + textFromFile + "\n````");
             await new Promise(res => setTimeout(res, 500));
             this.postMessage('content', { text: htmlText });
         }
@@ -782,7 +809,7 @@ class CodeNexusViewProvider {
             sessionTitles[key] = sessions[key].title; 
         }
         this.postMessage('canDelete', { text: currentSession, value: !currentlyResponding });
-        this.postMessage('updateValues', { value: [writeToFile, agentMode, llmIndex, fileHistory.capacity, outputFileName, sessionTitles, currentSession] });
+        this.postMessage('updateValues', { value: [writeToFile, agentMode, llmIndex, fileHistory.capacity, outputFileName, sessionTitles, currentSession, attachments] });
         this.postMessage("promptValue", { text: promptValue, value: currentMentionedFiles });
         this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
     }
@@ -1059,6 +1086,14 @@ class CodeNexusViewProvider {
                         await this.updateHTML(true);
                     }
                 }
+            } else if (message.command === "attachments") {
+                if (message.files) {
+                    attachments = message.files;
+                    sessions[currentSession].files = message.files;
+                } else {
+                    attachments = [];
+                    sessions[currentSession].files = message.files;
+                }
             }
         });
     }
@@ -1186,6 +1221,10 @@ class CodeNexusViewProvider {
                         
                         <textarea id="prompt" rows="3" placeholder="${placeholder}"></textarea>
                         <div tabindex='-1' id="file-options"></div>
+                        <details id="files-dropdown">
+                            <summary id="files-dropdown-button" class="snippet-button">Files</summary>
+                            <div id="preview-container"></div>
+                        </details>
                         
                         <div class="options-container">
                             <div id="llmDropdown">
@@ -1209,6 +1248,10 @@ class CodeNexusViewProvider {
                                 <input ${writeToFile ? "" : "disabled"} type="text" id="outputFileNameInput" value="${outputFileName == "output" ? "" : outputFileName}" placeholder="Enter file name...">
                             </div>
                             
+                            <label for="file-input" id="file-label" class="options" title="Add Files">
+                                <i class="fas fa-plus"></i>
+                            </label>
+                            <input type="file" multiple accept="image/*" id="file-input">
                             <button title="Chat Sessions" class="options" id="toggle-sidebar-btn"><i class="fa-regular fa-pen-to-square"></i></button>
                             <button title="Clear History" class="options" id="clear-history"><i class="fas fa-solid fa-trash-can icon"></i></button>
                             <button title="Refresh Files" class="options" id="refresh-files"><i class="fas fa-solid fa-sync-alt icon"></i></button>
