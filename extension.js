@@ -365,7 +365,7 @@ const sendStream = async (provider, stream, final=false, key=null) => {
  * @param {string} text - The message text.
  * @param {boolean} [addFiles=false] - Add files to the message.
  */
-const addMessage = (messages, role, text, addFiles) => {
+const addMessage = (messages, role, text, addFiles=false) => {
     if (addFiles) {
         const content = [{ type: "text", text }];
         for (const file of attachments) {
