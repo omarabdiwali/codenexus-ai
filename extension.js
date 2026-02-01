@@ -36,14 +36,16 @@ const {
 const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
-let fileHistory = new LRUCache(3);
+const activePrograms = new Set();
 const defaultInclude = "";
 const defaultExclude = "{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}";
 
+let fileHistory = new LRUCache(3);
 let sessions = [];
 let currentSession = initializeNewSession(sessions, 3);
 let currentResponse = "";
 let textFromFile = "";
+let savedData = { text: "", addition: false };
 let promptValue = "";
 let currentMentionedFiles = {};
 let locationOfMentionedFiles = [];
@@ -54,6 +56,7 @@ let writeToFile = false;
 let outputFileName = "output";
 let fileTitles = {};
 let currentlyResponding = false;
+let currentQuestionObj = {};
 let continueResponse = true;
 let agentMode = false;
 let ollama = false;
@@ -74,7 +77,7 @@ const mdProcessor = unified()
     .use(rehypeStringify);
 
 const token = '!@!@!@!'
-const backticks = '```';
+const backticks = '````';
 
 const systemMessage = `
 You are an AI Coding Agent assistant. When the user asks a question involving changes like file creation or modification, you MUST generate Python code that can be executed to perform those changes. The code you generate MUST:
@@ -84,10 +87,10 @@ You are an AI Coding Agent assistant. When the user asks a question involving ch
 - Use only Python.
 - Use necessary imports and no unnecessary ones. If a package is needed but not installed, generate a Python function within the code to install it.
 - When modifying or creating files, use the environment variable 'BASE_WORKSPACE_PATH' for file paths to ensure correct directory placement, and always default to the current directory, or '.'.
-- If multiple steps or programs are needed, split them logically into multiple Python programs, each enclosed separately within ${token}.
+- If multiple steps or programs are needed, split them logically into multiple Python programs, each enclosed separately following the mentioned rules.
 - When needing to execute commands, use shell execution via Python.
 - Provide some explanation (no more than four sentences) about the code after generating it.
-- After enclosing the Python code within ${token}, also enclose it within triple backticks as shown:
+- After enclosing the Python code within ${token}, also enclose it within ${backticks.length} backticks as shown:
 
   ${token}
   ${backticks}python
@@ -101,7 +104,7 @@ Always double-check that you follow these rules exactly before streaming your re
 
 # Output Format
 
-Generate only the described Python program(s) enclosed exactly once with ${token} at start and end, and also triple backticks around the code block inside those tokens. Include a brief explanation if needed, but keep it minimal and after the enclosed code.
+Generate only the described Python program(s) enclosed exactly once with ${token} at start and end, and also ${backticks.length} backticks around the code block inside those tokens. Include a brief explanation if needed, but keep it minimal and after the enclosed code.
 `
 
 let openRouterModels = [];
@@ -122,6 +125,7 @@ const setGlobalVariables = (sessionId) => {
     agentMode = sessions[sessionId].agentMode;
     outputFileName = sessions[sessionId].outputFileName;
     attachments = sessions[sessionId].files;
+    textFromFile = sessions[sessionId].textFromFile;
 
     const currentModels = ollama ? ollamaModels : openRouterModels;
     llmIndex = Math.min(sessions[sessionId].llmIndex, currentModels.length - 1);
@@ -129,6 +133,16 @@ const setGlobalVariables = (sessionId) => {
     sessions[sessionId].llmIndex = llmIndex;
     fileHistory = sessions[sessionId].fileHistory;
     if (fileHistory.size() != lruSize) fileHistory.changeSize(lruSize);
+}
+
+/**
+ * Updates the session variable within the currently active session (`currentSession`).
+ * @param {string} key - The key to update.
+ * @param {any} value - The value to set the key to.
+ */
+const updateSessionVariable = (key, value) => {
+    if (!(currentSession in sessions)) return;
+    sessions[currentSession][key] = value;
 }
 
 /**
@@ -165,12 +179,10 @@ const mdToHtml = async (md) => {
  * Handles file configuration changes.
  * @param {vscode.WorkspaceConfiguration} config - The workspace configuration.
  * @param {CodeNexusViewProvider} provider - The view provider instance.
- * @returns {Promise<void>}
  */
-const fileConfigChange = async (config, provider) => {
-    const included = config.get("FilesIncluded", defaultInclude);
-    const excluded = config.get("FilesExcluded", defaultExclude);
-    fileTitles = await getAllFiles(included, excluded, defaultInclude, defaultExclude);
+const fileConfigChange = (config, provider) => {
+    include = config.get("FilesIncluded", defaultInclude);
+    exclude = config.get("FilesExcluded", defaultExclude);
     provider.updateFileList();
 }
 
@@ -309,13 +321,13 @@ const updateQueuedChanges = async () => {
     for (const [variant, value] of queuedChanges) {
         if (variant == "selectLLM") {
             llmIndex = parseInt(value);
-            sessions[currentSession].llmIndex = parseInt(value);
+            updateSessionVariable("llmIndex", parseInt(value));
         } else if (variant == "outputToFile") {
             writeToFile = value;
-            sessions[currentSession].writeToFile = value;
+            updateSessionVariable("writeToFile", value);
         } else if (variant == "changeMode") {
             agentMode = value == "false" ? false : true;
-            sessions[currentSession].agentMode = value == "false" ? false : true;
+            updateSessionVariable("agentMode", agentMode);
         } else if (variant == "configUpdate") {
             await getConfigData(value[0], value[1]);
         }
@@ -329,16 +341,18 @@ const updateQueuedChanges = async () => {
  * @param {CodeNexusViewProvider} provider - The view provider instance.
  * @param {string} stream - The response stream text.
  * @param {boolean} final - Whether this is the final chunk.
+ * @param {string} chatKey - The unique key of the response.
  */
-const generateProgram = (provider, stream, final) => {
+const generateProgram = (provider, stream, final, chatKey) => {
     const currentTime = Date.now();
     if (currentTime - lastCalled < 2000 && !final) return;
     lastCalled = currentTime;
 
     const programs = getAllRunnablePrograms(stream, token, final);
     for (const prog of programs) {
-        const key = crypto.randomUUID();
+        const key = chatKey + " / " + crypto.randomUUID();
         runnablePrograms[key] = prog;
+        activePrograms.add(key);
         provider.postMessage('pythonProg', { text: prog, key });
     }
 }
@@ -353,7 +367,7 @@ const generateProgram = (provider, stream, final) => {
  */
 const sendStream = async (provider, stream, final=false, key=null) => {
     const showData = stream.replaceAll(token, "");
-    agentMode && generateProgram(provider, stream, final);
+    agentMode && generateProgram(provider, stream, final, key);
     const html = await mdToHtml(showData);
     provider.postMessage("response", { text: html, value: final, key });
 };
@@ -523,12 +537,15 @@ const parseResponseForImages = (response, messages) => {
  * @param {number} index - The LLM model index.
  * @param {number} count - The retry count.
  * @param {string} originalQuestion - The original user question.
+ * @param {string} additionalText - The additional text to add to the question, from `textFromFile`.
  * @param {Array} models - The available models.
  * @param {Array} names - The model names.
  * @returns {Promise<void>}
  */
-const sendChat = async (provider, messages, openChat, chat, index, count, originalQuestion, models, names) => {
+const sendChat = async (provider, messages, openChat, chat, index, count, originalQuestion, additionalText, models, names) => {
+    activePrograms.clear();
     const startTime = performance.now();
+    const key = crypto.randomUUID();
     let sendMessage = true;
     currentResponse = "";
 
@@ -540,7 +557,7 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
         });
 
         for await (const chunk of stream) {
-            if (sendMessage) provider.postMessage('cancelView', { value: true });
+            if (sendMessage) provider.postMessage('changeAsk', { value: true });
             sendMessage = false;
             if (!continueResponse) {
                 stream.controller.abort();
@@ -555,7 +572,7 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
                 }
             }
             currentResponse += val;
-            if (val.length > 0) writeToFile ? sendToFile(val, outputFileName) : await sendStream(provider, currentResponse);
+            if (val.length > 0) writeToFile ? sendToFile(val, outputFileName) : await sendStream(provider, currentResponse, false, key);
         }
 
         if (currentResponse.length === 0 && continueResponse) throw new Error("Error: LLM has given no response!");
@@ -566,7 +583,6 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
 
         const runTime = `Call to ${names[index]} took ${totalTime} seconds.`;
         const totalResponse = `${currentResponse}\n\n**${runTime}**`;
-        const key = crypto.randomUUID();
 
         if (writeToFile) {
             const pathToFile = getFilePath(outputFileName, "md");
@@ -578,12 +594,13 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
             await sendStream(provider, totalResponse, true, key);
         }
 
+        activePrograms.clear();
         questionHistory.push(chat);
         responseHistory.push(totalResponse);
         sessions[currentSession].chats.push({
             question: originalQuestion,
             response: totalResponse,
-            snippet: textFromFile,
+            snippet: additionalText,
             mode: agentMode,
             key
         })
@@ -594,7 +611,7 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
             let totalTime = `${(performance.now() - startTime) / 1000}`;
             totalTime = totalTime.substring(0, totalTime.indexOf('.') + 5);
             const runTime = `Call to ${names[index]} took ${totalTime} seconds.`;
-            writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : await sendStream(provider, runTime);
+            writeToFile ? sendToFile(`**${runTime}**`, outputFileName) : await sendStream(provider, runTime, true, key);
             continueResponse = true;
             return;
         }
@@ -612,7 +629,7 @@ const sendChat = async (provider, messages, openChat, chat, index, count, origin
             index += 1;
             index %= models.length;
             vscode.window.showInformationMessage(`Switching to ${names[index]}...`);
-            await sendChat(provider, messages, openChat, chat, index, count + 1, originalQuestion, models, names);
+            await sendChat(provider, messages, openChat, chat, index, count + 1, originalQuestion, additionalText, models, names);
         }
     }
 };
@@ -670,9 +687,11 @@ async function activate(context) {
 
     vscode.commands.registerCommand('codenexus-ai.chat.focus', async (data) => {
         if (provider) {
+            const correctData = data == undefined ? savedData : data;
+            savedData = correctData;
             if (!provider._view) await vscode.commands.executeCommand('workbench.view.extension.codenexus-ai-view');
             provider.show();
-            await provider.handleIncomingData(data.text, data.addition);
+            await provider.handleIncomingData(correctData.text, correctData.addition);
         } else {
             vscode.window.showWarningMessage("Chat view provider not available yet.");
         }
@@ -707,8 +726,7 @@ async function activate(context) {
     fileTitles = await getAllFiles(include, exclude, defaultInclude, defaultExclude);
 
     const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.*', false, true, false);
-    const getFilesOnChange = async () => {
-        fileTitles = await getAllFiles(include, exclude, defaultInclude, defaultExclude);
+    const getFilesOnChange = () => {
         provider.updateFileList();
     }
 
@@ -772,9 +790,9 @@ class CodeNexusViewProvider {
         if (trimmed.length > 0) {
             if (!textFromFile) textFromFile = data;
             else textFromFile = addition ? textFromFile + '\n\n' + data : data;
-            let htmlText = await mdToHtml("````\n" + textFromFile + "\n````");
+            updateSessionVariable("textFromFile", textFromFile);
             await new Promise(res => setTimeout(res, 500));
-            this.postMessage('content', { text: htmlText });
+            await this.provideContent(textFromFile);
         }
 
         this.postMessage('focus');
@@ -791,12 +809,16 @@ class CodeNexusViewProvider {
     /**
      * Updates the file list in the webview.
      * @param {boolean} [updatePath=true] - Whether to update the workspace path.
+     * @param {boolean} [fetchFiles=true] - Whether to re-fetch the files in the current directory.
      */
-    updateFileList(updatePath=true) {
-        const notOpenFolder = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
-        this.postMessage('fileTitles', { value: fileTitles });
-        if (!notOpenFolder && updatePath) {
-            this.postMessage('workspacePath', { value: vscode.workspace.workspaceFolders[0].uri.fsPath });
+    updateFileList(updatePath=true, fetchFiles=true) {
+        if (updatePath) this.updateWorkspacePath();
+        if (fetchFiles) {
+            getAllFiles(include, exclude, defaultInclude, defaultExclude)
+                .then(newFiles => { fileTitles = newFiles; })
+                .finally(() => { this.postMessage('fileTitles', { value: fileTitles }); })
+        } else {
+            this.postMessage('fileTitles', { value: fileTitles });
         }
     }
 
@@ -822,6 +844,26 @@ class CodeNexusViewProvider {
     }
 
     /**
+     * Generates the headers for the code blocks.
+     */
+    generateHeaders() {
+        this.postMessage('generateHeaders', { value: runnablePrograms });
+    }
+
+    /**
+     * Provides additional content to the question.
+     * @param {string} text - The text to add to the question.
+     */
+    async provideContent(text) {
+        if (text.length == 0) {
+            this.postMessage('content', { text });
+        } else {
+            let htmlText = await mdToHtml("````\n" + text + "\n````");
+            this.postMessage('content', { text: htmlText });
+        }
+    }
+
+    /**
      * Shows the webview.
      */
     show() {
@@ -842,8 +884,10 @@ class CodeNexusViewProvider {
         this._view.webview.html = await this._getHtmlForWebview(showSidebar);
         this.inProgress();
         this.updateWorkspacePath();
-        this.updateFileList(false);
+        this.updateFileList(false, false);
         this.updatePageValues();
+        this.generateHeaders();
+        await this.provideContent(textFromFile);
         this.postMessage('focus');
     }
 
@@ -852,9 +896,11 @@ class CodeNexusViewProvider {
      */
     inProgress() {
         if (currentlyResponding) {
-            this.postMessage("chat", { text: userQuestions.at(-1) });
+            const question = currentQuestionObj.question;
+            const snippet = currentQuestionObj.snippet || "";
+            this.postMessage("chat", { text: question, value: snippet });
             this.postMessage("loading", { text: this._getSpinner() });
-            this.postMessage("cancelView", { value: true });
+            this.postMessage("changeAsk", { value: true });
         }
     }
 
@@ -899,7 +945,7 @@ class CodeNexusViewProvider {
         webviewView.webview.html = await this._getHtmlForWebview();
         this.postMessage("configUpdate", { key: 'fileSize', value: fileHistory.capacity });
         this.postMessage('focus');
-        this.updateFileList();
+        this.updateFileList(true, false);
 
         webviewView.onDidChangeVisibility(async () => {
             if (webviewView.visible) {
@@ -909,11 +955,12 @@ class CodeNexusViewProvider {
                 }
                 this.inProgress();
                 this.updateWorkspacePath();
-                this.updateFileList(false);
+                this.updateFileList(false, false);
                 this.updatePageValues();
+                this.generateHeaders();
+                await this.provideContent(textFromFile);
                 this.postMessage('focus');
             } else {
-                textFromFile = "";
                 webviewView.webview.html = webviewView.webview.html.replace("sidebar-visible", "sidebar-hidden");
             }
         });
@@ -932,15 +979,19 @@ class CodeNexusViewProvider {
                     return;
                 }
 
-                sessions[currentSession].llmIndex = llmIndex;
+                updateSessionVariable("llmIndex", llmIndex);
                 this.postMessage('disableAsk');
                 currentlyResponding = true;
+                currentQuestionObj = {
+                    question: message.text,
+                    snippet: sessions[currentSession].textFromFile
+                }
 
                 promptValue = "";
                 currentMentionedFiles = {};
 
-                sessions[currentSession].prompt = "";
-                sessions[currentSession].mentionedFiles = {};
+                updateSessionVariable("prompt", "");
+                updateSessionVariable("mentionedFiles", {});
 
                 let userQuestion = message.text;
                 userQuestions.push(userQuestion);
@@ -948,8 +999,8 @@ class CodeNexusViewProvider {
                 writeToFile = message.writeToFile;
                 outputFileName = message.outputFile ? message.outputFile : "output";
 
-                sessions[currentSession].writeToFile = message.writeToFile;
-                sessions[currentSession].outputFileName = message.outputFile ? message.outputFile : "output";
+                updateSessionVariable("writeToFile", message.writeToFile);
+                updateSessionVariable("outputFileName", outputFileName)
 
                 if (sessions[currentSession].title == "New Chat") {
                     setSessionTitle(sessions[currentSession], userQuestion);
@@ -968,45 +1019,58 @@ class CodeNexusViewProvider {
                     text = replaceFileMentions(text, ["@" + file]);
                 }
 
-                sessions[currentSession].fileHistory = fileHistory;
+                updateSessionVariable("fileHistory", fileHistory);
 
                 this.loading();
                 this.postMessage('content', { text: '' });
-
                 const messages = await generateMessages(message.text, textFromFile);
                 this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
-                if (ollama) await sendChat(this, messages, this.ollamaChat, text, llmIndex, 0, userQuestion, ollamaModels, ollamaNames)
-                else await sendChat(this, messages, this.openChat, text, llmIndex, 0, userQuestion, openRouterModels, openRouterNames);
+
+                const additionalContent = sessions[currentSession].textFromFile;
                 textFromFile = "";
-                this.postMessage('cancelView', { value: false });
+                updateSessionVariable("textFromFile", "");
+                
+                if (ollama) await sendChat(this, messages, this.ollamaChat, text, llmIndex, 0, userQuestion, additionalContent, ollamaModels, ollamaNames)
+                else await sendChat(this, messages, this.openChat, text, llmIndex, 0, userQuestion, additionalContent, openRouterModels, openRouterNames);
+                this.postMessage('changeAsk', { value: false });
                 this.postMessage('canDelete', { text: currentSession, value: true });
 
                 await updateQueuedChanges();
                 currentlyResponding = false;
+                currentQuestionObj = {};
                 lastCalled = 0;
             } else if (message.command === 'copy') {
                 await vscode.env.clipboard.writeText(message.text);
             } else if (message.command === "selectLLM") {
                 llmIndex = parseInt(message.index);
-                sessions[currentSession].llmIndex = llmIndex;
+                updateSessionVariable("llmIndex", llmIndex);
             } else if (message.command === 'remove') {
                 textFromFile = "";
+                updateSessionVariable("textFromFile", "");
             } else if (message.command === 'clearHistory') {
                 this.postMessage('history', { value: currentlyResponding });
-                sessions[currentSession].chats = [];
-                runnablePrograms = {};
+                updateSessionVariable("chats", []);
+                if (currentlyResponding) {
+                    const programKeys = [...Object.keys(runnablePrograms)];
+                    for (const key of programKeys) {
+                        if (activePrograms.has(key)) continue;
+                        delete runnablePrograms[key];
+                    }
+                } else {
+                    runnablePrograms = {};
+                }
             } else if (message.command === 'stopResponse') {
                 continueResponse = false;
-                this.postMessage('cancelView', { value: false });
+                this.postMessage('changeAsk', { value: false });
             } else if (message.command === 'outputToFile') {
                 if (currentlyResponding) queuedChanges.push([message.command, message.checked]);
                 else {
                     writeToFile = message.checked;
-                    sessions[currentSession].writeToFile = writeToFile;
+                    updateSessionVariable("writeToFile", writeToFile);
                 }
             } else if (message.command === 'fileContext') {
                 fileHistory.delete(message.key);
-                sessions[currentSession].fileHistory = fileHistory;
+                updateSessionVariable("fileHistory", fileHistory);
             } else if (message.command === 'runProgram') {
                 const file = runnablePrograms[message.key];
                 if (!file) return;
@@ -1016,23 +1080,27 @@ class CodeNexusViewProvider {
                 if (currentlyResponding) queuedChanges.push([message.command, message.value]);
                 else {
                     agentMode = message.value == 'false' ? false : true;
-                    sessions[currentSession].agentMode = agentMode;
+                    updateSessionVariable("agentMode", agentMode);
                 }
             } else if (message.command === 'updatePrompt') {
-                sessions[currentSession].prompt = message.value;
-                sessions[currentSession].mentionedFiles = message.files;
+                updateSessionVariable("prompt", message.value);
+                updateSessionVariable("mentionedFiles", message.files);
                 promptValue = message.value;
                 currentMentionedFiles = message.files;
             } else if (message.command === 'deleteEntry') {
-                const index = sessions[currentSession].chats.findIndex((val) => val.key == message.key)
+                const index = sessions[currentSession].chats.findIndex((val) => val.key == message.key);
+                const programKeys = [...Object.keys(runnablePrograms)];
+                for (const key of programKeys) {
+                    const [chatKey, _] = key.split(" / ");
+                    if (chatKey == message.key) delete runnablePrograms[key];
+                }
                 if (index == -1) return;
                 sessions[currentSession].chats.splice(index, 1);
                 this.interactions = sessions[currentSession].chats.length - 1;
             } else if (message.command === 'openSettings') {
                 await vscode.commands.executeCommand("workbench.action.openSettings", "CodenexusAI")
             } else if (message.command === 'refreshFiles') {
-                fileTitles = await getAllFiles(include, exclude, defaultInclude, defaultExclude);
-                this.postMessage('fileTitles', { value: fileTitles });
+                this.updateFileList();
             } else if (message.command === 'updateApiKey') {
                 await vscode.commands.executeCommand('codenexus-ai.changeApiKey');
             } else if (message.command === 'copyResponse') {
@@ -1087,13 +1155,9 @@ class CodeNexusViewProvider {
                     }
                 }
             } else if (message.command === "attachments") {
-                if (message.files) {
-                    attachments = message.files;
-                    sessions[currentSession].files = message.files;
-                } else {
-                    attachments = [];
-                    sessions[currentSession].files = message.files;
-                }
+                let newFiles = message.files ? message.files : [];
+                attachments = newFiles;
+                updateSessionVariable("files", newFiles);
             }
         });
     }
@@ -1131,27 +1195,27 @@ class CodeNexusViewProvider {
             if (item.snippet && item.snippet.trim() !== '') {
                 const sanitizedSnippet = sanitizeString(item.snippet);
                 snippetHtml = `
-                <br><br>
-                <details class="snippet-dropdown">
-                    <summary class="snippet-button">View Snippet</summary>
-                    <div class="snippet-content">
-                        <pre><code>${sanitizedSnippet}</code></pre>
-                    </div>
-                </details>
-            `;
+                    <br><br>
+                    <details class="snippet-dropdown">
+                        <summary class="snippet-button">View Snippet</summary>
+                        <div class="snippet-content">
+                            <pre><code>${sanitizedSnippet}</code></pre>
+                        </div>
+                    </details>
+                `;
             }
 
             chatHistoryHtml += `
-            <div class="chat-entry" id="${item.key}">
-                <div class="question"><strong>
-                    You:</strong> ${highlightFilenameMentions(item.question, fileTitles)}
-                    ${snippetHtml}
+                <div class="chat-entry" id="${item.key}">
+                    <div class="question"><strong>
+                        You:</strong> ${highlightFilenameMentions(item.question, fileTitles)}
+                        ${snippetHtml}
+                    </div>
+                    <div class="response">
+                        ${response}
+                    </div>
                 </div>
-                <div class="response">
-                    ${response}
-                </div>
-            </div>
-        `;
+            `;
         }
 
         let sessionsHTML = '';
@@ -1249,7 +1313,7 @@ class CodeNexusViewProvider {
                             </div>
                             
                             <label for="file-input" id="file-label" class="options" title="Add Files">
-                                <i class="fas fa-plus"></i>
+                                <i class="fas fa-file-circle-plus"></i>
                             </label>
                             <input type="file" multiple accept="image/*" id="file-input">
                             <button title="Chat Sessions" class="options" id="toggle-sidebar-btn"><i class="fa-regular fa-pen-to-square"></i></button>

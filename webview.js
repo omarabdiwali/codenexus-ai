@@ -578,10 +578,12 @@ const generateChatEntryButtons = (element, key) => {
  * Adds action buttons (run/copy) to code blocks in responses.
  * @param {HTMLElement} codeBlock - The code block element.
  * @param {number} currentTime - The current time for matching purposes.
+ * @param {Object<string, string>} programs - The current runnable programs, used when webview visibility changes.
  */
-const generateButtons = (codeBlock, currentTime) => {
+const generateButtons = (codeBlock, currentTime, programs=null) => {
     const container = document.createElement('div');
     const header = document.createElement('div');
+    const runnablePrograms = programs == null ? queue : Object.entries(programs);
     if (!codeBlock.textContent) return;
     const copyButton = generateCopyButton(codeBlock.textContent.trim(), 'code-copy');
 
@@ -594,9 +596,8 @@ const generateButtons = (codeBlock, currentTime) => {
     header.appendChild(copyButton);
     const codeKey = codeBlock.textContent.trim();
 
-    if (currentTime && currentTime - lastMatching > 1000 && !(codeKey in alreadyMatched)) {
-        lastMatching = currentTime;
-        for (const [key, value] of queue) {
+    if (currentTime == null && runnablePrograms.length > 0) {
+        for (const [key, value] of runnablePrograms) {
             if (compareCodeBlock(codeBlock.textContent.trim(), value.trim())) {
                 const runButton = generateRunButton(key);
                 header.appendChild(runButton);
@@ -607,6 +608,16 @@ const generateButtons = (codeBlock, currentTime) => {
     } else if (codeKey in alreadyMatched) {
         const runButton = generateRunButton(alreadyMatched[codeKey]);
         header.appendChild(runButton);
+    } else if (currentTime && currentTime - lastMatching > 1000) {
+        lastMatching = currentTime;
+        for (const [key, value] of runnablePrograms) {
+            if (compareCodeBlock(codeBlock.textContent.trim(), value.trim())) {
+                const runButton = generateRunButton(key);
+                header.appendChild(runButton);
+                alreadyMatched[codeKey] = key;
+                break;
+            }
+        }
     }
 };
 
@@ -635,15 +646,6 @@ const cancelButtons = (codeBlock) => {
 };
 
 /**
- * Adds copy buttons to all existing code blocks.
- */
-const addCopyButtons = () => {
-    document.querySelectorAll("#chat-history pre code").forEach(codeBlock => {
-        generateButtons(codeBlock, null);
-    });
-};
-
-/**
  * Highlights new code blocks and adds interaction buttons.
  * @param {number} currentTime - The current time for matching purposes.
  */
@@ -668,11 +670,13 @@ const highlightMentionedCodeBlock = () => {
 };
 
 /**
- * Initial syntax highlighting setup for all code blocks.
+ * Generates the header and required buttons for each code block.
+ * @param {Object<string, string>} programs - The current runnable programs.
  */
-const highlightAllCodeBlocks = () => {
-    hljs.highlightAll();
-    addCopyButtons();
+const generateCodeHeaders = (programs) => {
+    document.querySelectorAll("#chat-history pre code").forEach(codeBlock => {
+        generateButtons(codeBlock, null, programs);
+    });
 };
 
 /**
@@ -684,7 +688,7 @@ const addButtons = () => {
     })
 }
 
-highlightAllCodeBlocks();
+hljs.highlightAll();
 addButtons();
 
 /**
@@ -883,10 +887,11 @@ const createSearchItem = (file, value, idx, total) => {
 
 /**
  * Orders file options based on mention status, position, and alphabetical order.
+ * @param {string} searchString - The string/filename to search for.
  * @param {Array} options - The file options to sort.
  * @returns {Array} The sorted file options.
  */
-const orderFileOptions = (options) => {
+const orderFileOptions = (searchString, options) => {
     return options.sort((a, b) => {
         const [filenameA, locationA] = a;
         const [filenameB, locationB] = b;
@@ -908,6 +913,11 @@ const orderFileOptions = (options) => {
             const keyB = parseInt(entryB[0]);
             return keyB - keyA;
         }
+
+        const startsWithA = filenameA.startsWith(searchString);
+        const startsWithB = filenameB.startsWith(searchString);
+        if (startsWithA && !startsWithB) return -1;
+        if (!startsWithA && startsWithB) return 1;
 
         const nameCompare = filenameA.localeCompare(filenameB);
         if (nameCompare !== 0) return nameCompare;
@@ -931,7 +941,8 @@ const showFileOptions = (string) => {
     const file = word.substring(1).trim();
     const options = [];
     for (const key of Object.keys(fileTitlesWithLocations)) {
-        if (file && key.startsWith(file)) {
+        const lowerCaseKey = key.toLowerCase();
+        if (file && lowerCaseKey.startsWith(file.toLowerCase())) {
             options.push([key, fileTitlesWithLocations[key]]);
         }
     }
@@ -948,7 +959,7 @@ const showFileOptions = (string) => {
         }
     }
 
-    const orderedOptions = orderFileOptions(flatOptions);
+    const orderedOptions = orderFileOptions(file, flatOptions);
     const totalLength = orderedOptions.length;
     let idx = 0;
 
@@ -1241,7 +1252,7 @@ window.addEventListener("message", (e) => {
     } else if (command == 'history') {
         if (value) responseArea.replaceChildren(responseArea.lastElementChild);
         else responseArea.replaceChildren();
-    } else if (command == 'cancelView') {
+    } else if (command == 'changeAsk') {
         if (value) {
             ask.classList.replace("ask-chat", "cancel-response");
             ask.innerText = "Stop";
@@ -1250,11 +1261,13 @@ window.addEventListener("message", (e) => {
             ask.classList.replace("cancel-response", "ask-chat");
             ask.innerText = "Ask";
             ask.disabled = false;
+            newSessions.disabled = false;
             lastMatching = 0;
             alreadyMatched = {};
         }
     } else if (command == 'disableAsk') {
         ask.disabled = true;
+        newSessions.disabled = true;
     } else if (command == 'fileTitles') {
         fileTitlesWithLocations = value;
         refreshFiles.disabled = false;
@@ -1294,6 +1307,7 @@ window.addEventListener("message", (e) => {
         const deleteButton = sessionItem.querySelector('.session-delete');
         if (!deleteButton) return;
         deleteButton.style.display = value ? 'block' : 'none';
+        newSessions.disabled = !value;
     } else if (command == 'updateTitle') {
         const sessionItem = document.querySelector(`div[data-session-id="${text}"]`);
         if (!sessionItem) return;
@@ -1301,5 +1315,7 @@ window.addEventListener("message", (e) => {
         if (!sessionTitle) return;
         sessionItem.title = value;
         sessionTitle.innerText = value;
+    } else if (command == 'generateHeaders') {
+        generateCodeHeaders(value);
     }
 });

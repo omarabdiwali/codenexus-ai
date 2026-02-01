@@ -38,24 +38,18 @@ const getAllFiles = async (include, exclude, defaultInclude, defaultExclude) => 
 }
 
 /**
- * Debounce function to stop repetitive calls to `getAllFiles`.
- * @param {Function} func - The function to debounce.
- * @param {number} wait - The number of milliseconds to wait.
- * @returns {Promise<any>} A debounced function.
+ * Debounce function for repeated calls.
+ * @param {Function} func - Synchronous function to debounce.
+ * @param {number} wait - Milliseconds to wait.
  */
 const debounce = (func, wait) => {
     let timeout;
-    let lastPromise = null;
-    return async (...args) => {
+    return (...args) => {
         const context = this;
-        const later = async () => {
-            timeout = null;
-            lastPromise = await func.apply(context, args);
-        };
-
         clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-        return lastPromise;
+        timeout = setTimeout(() => {
+            func.apply(context, args);
+        }, wait);
     };
 };
 
@@ -124,7 +118,7 @@ const getFileNames = (allFiles) => {
 /**
  * Reads text from a file.
  * @param {string} path - The path of the file to read.
- * @returns {Promise<string|null>} A promise that resolves to the file content or `null` if an error occurs.
+ * @returns A promise that resolves to the file content or `null` if an error occurs.
  */
 const getTextFromFile = async (path) => {
     const uri = vscode.Uri.file(path);
@@ -203,7 +197,7 @@ const getAllRunnablePrograms = (text, token, final=false) => {
     const blocks = [];
     const escapedToken = escapeRegExp(token);
     const regex = new RegExp(
-        `${escapedToken}[\\s\\S]*?\`\`\`(?:\\w+)?\\n([\\s\\S]*?)\`\`\`[\\s\\S]*?${escapedToken}`,
+        `${escapedToken}[\\s\\S]*?\`{3,4}(?:\\w+)?\\n([\\s\\S]*?)\`{3,4}[\\s\\S]*?${escapedToken}`,
         "g"
     );
     
@@ -283,17 +277,19 @@ const sanitizeString = (str) => {
  */
 const initializeNewSession = (sessions, lruSize) => {
     const newSession = new Date().getTime();
-    sessions[newSession] = {};
-    sessions[newSession].prompt = '';
-    sessions[newSession].mentionedFiles = {};
-    sessions[newSession].writeToFile = false;
-    sessions[newSession].agentMode = false;
-    sessions[newSession].llmIndex = 0;
-    sessions[newSession].outputFileName = "output";
-    sessions[newSession].fileHistory = new LRUCache(lruSize);
-    sessions[newSession].title = "New Chat";
-    sessions[newSession].chats = [];
-    sessions[newSession].files = [];
+    sessions[newSession] = {
+        prompt: '',
+        textFromFile: '',
+        title: 'New Chat',
+        outputFileName: 'output',
+        writeToFile: false,
+        agentMode: false,
+        llmIndex: 0,
+        fileHistory: new LRUCache(lruSize),
+        mentionedFiles: {},
+        chats: [],
+        files: [],
+    }
     return newSession;
 }
 
