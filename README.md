@@ -133,10 +133,10 @@ Add local AI capabilities using Ollama's lightweight framework:
 5. Select and use the LLM from the extension window.
 
 ## 📂 Project Structure
-| File             | Purpose                                  |
+| File/Directory   | Purpose                                  |
 |------------------|------------------------------------------|
 | `extension.js`   | Main extension logic & VSCode integration.|
-| `webview.js`     | Chat UI & message handling.               |
+| `./webview`      | Chat UI & message handling.               |
 | `functions.js`   | Utilities & core functionality.           |
 | `styles.css`     | Visual styling.                           |
 | `spinner.css`    | Loading animation.                        |

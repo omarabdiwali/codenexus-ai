@@ -1237,9 +1237,16 @@ class CodeNexusViewProvider {
             `;
         }
 
-        const jsFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "webview.js"));
+        const files = ["main.js", "chat.js", "events.js"]
+        const jsFiles = files.map((file) => this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "webview", file)))
+        let imports = '';
+
+        for (const file of jsFiles) {
+            const nonce = getRandomString(32);
+            imports += `<script nonce="${nonce}" src="${file}"></script>`
+        }
+        
         const cssFile = this._view.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, "styles.css"));
-        const nonce = getRandomString(32);
         const disableOutput = !vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length == 0;
         const placeholder = `Type your message here, with @file.ext to mention files (max ${fileHistory.capacity}), and using tab to select the correct one...`
 
@@ -1332,8 +1339,7 @@ class CodeNexusViewProvider {
                     </div>
                 </div>
             </div>
-
-            <script nonce="${nonce}" src="${jsFile}"></script>
+            ${imports}
         </body>
         </html>
         `;
