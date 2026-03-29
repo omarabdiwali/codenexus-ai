@@ -59,21 +59,10 @@ A powerful VSCode extension that brings multi-LLM intelligence to your coding wo
 - [OpenRouter API Key](https://openrouter.ai/).
 - [Ollama](https://ollama.com) (optional, needed if you want access to local LLMs).
 
-### Installation Options
+### Installation
 
-**Method 1: VSIX Package**
 1. Download the latest release from [GitHub Releases](https://github.com/omarabdiwali/codenexus-ai/releases).
 2. Install via VSCode: `Ctrl+Shift+P` → "Install from VSIX".
-
-**Method 2: Source Installation**
-```bash
-git clone https://github.com/omarabdiwali/codenexus-ai.git
-npm install -g @vscode/vsce
-cd codenexus-ai
-npm install
-vsce package
-code --install-extension codenexus-ai-*.vsix
-```
 
 ## 🛠️ Usage
 

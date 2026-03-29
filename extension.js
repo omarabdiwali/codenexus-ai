@@ -22,7 +22,7 @@ const {
     getAllFiles,
     sendToFile,
     replaceFileMentions,
-    highlightFilenameMentions,
+    formatUserQuestion,
     getRandomString,
     LRUCache,
     runPythonFile,
@@ -33,19 +33,19 @@ const {
     setSessionTitle,
 } = require("./functions");
 
-const userQuestions = [];
 const questionHistory = [];
 const responseHistory = [];
 const activePrograms = new Set();
 const defaultInclude = "";
 const defaultExclude = "{**/node_modules/**,**/.next/**,**/images/**,**/*.png,**/*.jpg,**/*.svg,**/*.git*,**/*.eslint**,**/*.mjs,**/public/**,**/*config**,**/*.lock,**/*.woff,**/.venv/**,**/*.vsix,**/*._.DS_Store,**/*.prettierrc,**/Lib/**,**/lib/**}";
 
+let userQuestions = [];
 let fileHistory = new LRUCache(3);
 let sessions = [];
 let currentSession = initializeNewSession(sessions, 3);
 let currentResponse = "";
 let textFromFile = "";
-let savedData = { text: "", addition: false };
+let savedData = { text: "", addition: false, loop: false };
 let promptValue = "";
 let currentMentionedFiles = {};
 let locationOfMentionedFiles = [];
@@ -126,6 +126,7 @@ const setGlobalVariables = (sessionId) => {
     outputFileName = sessions[sessionId].outputFileName;
     attachments = sessions[sessionId].files;
     textFromFile = sessions[sessionId].textFromFile;
+    userQuestions = sessions[sessionId].userQuestions;
 
     const currentModels = ollama ? ollamaModels : openRouterModels;
     llmIndex = Math.min(sessions[sessionId].llmIndex, currentModels.length - 1);
@@ -742,6 +743,7 @@ async function activate(context) {
 
 class CodeNexusViewProvider {
     static viewType = 'codenexus-ai.chat';
+    /** @type {vscode.WebviewView} */
     _view;
 
     /**
@@ -832,7 +834,7 @@ class CodeNexusViewProvider {
         }
         this.postMessage('canDelete', { text: currentSession, value: !currentlyResponding });
         this.postMessage('updateValues', { value: [writeToFile, agentMode, llmIndex, fileHistory.capacity, outputFileName, sessionTitles, currentSession, attachments] });
-        this.postMessage("promptValue", { text: promptValue, value: currentMentionedFiles });
+        this.postMessage("questionValue", { text: promptValue, value: currentMentionedFiles });
         this.postMessage('fileContext', { value: Array.from(fileHistory.cache) });
     }
 
@@ -994,13 +996,19 @@ class CodeNexusViewProvider {
                 updateSessionVariable("mentionedFiles", {});
 
                 let userQuestion = message.text;
-                userQuestions.push(userQuestion);
+                let questionKey = crypto.randomUUID();
+                userQuestions.push({
+                    question: userQuestion,
+                    snippet: textFromFile,
+                    key: questionKey
+                });
                 questionHistory.push(userQuestion);
                 writeToFile = message.writeToFile;
                 outputFileName = message.outputFile ? message.outputFile : "output";
 
                 updateSessionVariable("writeToFile", message.writeToFile);
-                updateSessionVariable("outputFileName", outputFileName)
+                updateSessionVariable("outputFileName", outputFileName);
+                updateSessionVariable("userQuestions", userQuestions);
 
                 if (sessions[currentSession].title == "New Chat") {
                     setSessionTitle(sessions[currentSession], userQuestion);
@@ -1008,7 +1016,7 @@ class CodeNexusViewProvider {
                 }
 
                 this.postMessage('canDelete', { text: currentSession, value: false });
-                this.postMessage('chat', { text: userQuestion, value: textFromFile });
+                this.postMessage('chat', { text: userQuestion, value: textFromFile, key: questionKey });
                 if (writeToFile) sendToFile("**" + userQuestion + "**\n\n", outputFileName);
 
                 let text = message.text;
@@ -1041,6 +1049,25 @@ class CodeNexusViewProvider {
                 lastCalled = 0;
             } else if (message.command === 'copy') {
                 await vscode.env.clipboard.writeText(message.text);
+            } else if (message.command === 'copyQuestion') {
+                const chatEntry = userQuestions.find((val) => val.key == message.key);
+                if (chatEntry == undefined) return;
+                const obj = { question: chatEntry.question, snippet: chatEntry.snippet, source: "question" };
+                await vscode.env.clipboard.writeText(JSON.stringify(obj))
+            } else if (message.command === 'paste') {
+                const content = await vscode.env.clipboard.readText();
+                const reqKeys = ["question", "snippet", "source"];
+                try {
+                    const json = JSON.parse(content);
+                    const keys = Object.keys(json);
+                    if (keys.length != reqKeys.length) throw Error("Invalid type.");
+                    if (!keys.includes("question") || !keys.includes("snippet") || !keys.includes("source")) throw Error("Invalid type.");
+                    if (json["source"] != "question") throw Error("Invalid type.");
+                    this.handleIncomingData(json["snippet"], true);
+                    this.postMessage('paste', { text: json["question"] });
+                } catch {
+                    this.postMessage('paste', { text: content });
+                }
             } else if (message.command === "selectLLM") {
                 llmIndex = parseInt(message.index);
                 updateSessionVariable("llmIndex", llmIndex);
@@ -1051,6 +1078,10 @@ class CodeNexusViewProvider {
                 this.postMessage('history', { value: currentlyResponding });
                 updateSessionVariable("chats", []);
                 if (currentlyResponding) {
+                    if (userQuestions) {
+                        userQuestions = [userQuestions.at(-1)];
+                        updateSessionVariable("userQuestions", userQuestions);
+                    }
                     const programKeys = [...Object.keys(runnablePrograms)];
                     for (const key of programKeys) {
                         if (activePrograms.has(key)) continue;
@@ -1058,6 +1089,8 @@ class CodeNexusViewProvider {
                     }
                 } else {
                     runnablePrograms = {};
+                    userQuestions = [];
+                    updateSessionVariable("userQuestions", userQuestions);
                 }
             } else if (message.command === 'stopResponse') {
                 continueResponse = false;
@@ -1082,7 +1115,7 @@ class CodeNexusViewProvider {
                     agentMode = message.value == 'false' ? false : true;
                     updateSessionVariable("agentMode", agentMode);
                 }
-            } else if (message.command === 'updatePrompt') {
+            } else if (message.command === 'updateQuestion') {
                 updateSessionVariable("prompt", message.value);
                 updateSessionVariable("mentionedFiles", message.files);
                 promptValue = message.value;
@@ -1096,6 +1129,10 @@ class CodeNexusViewProvider {
                 }
                 if (index == -1) return;
                 sessions[currentSession].chats.splice(index, 1);
+                if (index < userQuestions.length) {
+                    userQuestions.splice(index, 1);
+                    updateSessionVariable("userQuestions", userQuestions);
+                }
                 this.interactions = sessions[currentSession].chats.length - 1;
             } else if (message.command === 'openSettings') {
                 await vscode.commands.executeCommand("workbench.action.openSettings", "CodenexusAI")
@@ -1158,6 +1195,8 @@ class CodeNexusViewProvider {
                 let newFiles = message.files ? message.files : [];
                 attachments = newFiles;
                 updateSessionVariable("files", newFiles);
+            } else {
+                console.log(`[BACKEND] Unimplemented command: ${message.command}`);
             }
         });
     }
@@ -1189,6 +1228,7 @@ class CodeNexusViewProvider {
         let chatHistoryHtml = '';
         for (let i = 0; i < sessions[currentSession].chats.length; i++) {
             const item = sessions[currentSession].chats[i];
+            const questionItem = i < userQuestions.length ? userQuestions[i] : undefined;
             const response = await mdToHtml(item.response.replaceAll(token, ""));
             let snippetHtml = '';
 
@@ -1207,8 +1247,8 @@ class CodeNexusViewProvider {
 
             chatHistoryHtml += `
                 <div class="chat-entry" id="${item.key}">
-                    <div class="question"><strong>
-                        You:</strong> ${highlightFilenameMentions(item.question, fileTitles)}
+                    <div class="question" ${questionItem ? `id="${questionItem.key}"` : ""}><strong>
+                        You:</strong> ${formatUserQuestion(item.question, fileTitles)}
                         ${snippetHtml}
                     </div>
                     <div class="response">

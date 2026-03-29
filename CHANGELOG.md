@@ -47,3 +47,8 @@
   - Moved snippets to their respective sessions
   - Fixed issue where snippets are not sent with request when initially opened
   - Changed file icon, reworked and created better functions
+
+**v2.3.0**
+  - Added the functionality for users to copy their previous questions, including the provided snippet, and handle formatting
+  - Fixed issue where long lines of text continue off screen, also fixed updating issues
+  - Formats user questions correctly when building the HTML

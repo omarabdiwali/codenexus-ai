@@ -7,7 +7,7 @@ const fileRegEx = new RegExp(/\B@(?:[a-zA-Z0-9_.-]*[a-zA-Z0-9_-]+)/g);
 /**
  * Constructs the file path for a given filename.
  * @param {string} filename - The name of the file.
- * @param {string} [fileType='md'] - The file extension.
+ * @param {string} fileType - The file extension.
  * @returns {string} The full file path.
  */
 const getFilePath = (filename, fileType) => {
@@ -85,13 +85,13 @@ const replaceFileMentions = (question, files) => {
 };
 
 /**
- * Highlights filename mentions in text.
+ * Formats user questions for the chat history by highlighting '@mentioned' files, and preserving line breaks.
  * @param {string} text - The text to highlight filename mentions in.
  * @param {FileLocationsMap} fileTitles - An object mapping filenames to their paths.
  * @returns {string} The text with filename mentions highlighted.
  */
-const highlightFilenameMentions = (text, fileTitles) => {
-    text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+const formatUserQuestion = (text, fileTitles) => {
+    text = text.replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>')
     return text.replace(fileRegEx, (match) => {
         const title = match.substring(1);
         if (!(title in fileTitles)) return match;
@@ -288,6 +288,7 @@ const initializeNewSession = (sessions, lruSize) => {
         fileHistory: new LRUCache(lruSize),
         mentionedFiles: {},
         chats: [],
+        userQuestions: [],
         files: [],
     }
     return newSession;
@@ -413,7 +414,7 @@ module.exports = {
     debounce,
     sendToFile,
     replaceFileMentions,
-    highlightFilenameMentions,
+    formatUserQuestion,
     getFileNames,
     getRandomString,
     getAllRunnablePrograms,

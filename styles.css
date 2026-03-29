@@ -30,6 +30,7 @@ blockquote {
     color: var(--vscode-editor-selectionForeground);
     background-color: var(--vscode-editor-selectionBackground);
     margin-bottom: 2px;
+    word-wrap: break-word;
 }
 .delete-entry {
     position: absolute;
@@ -383,6 +384,15 @@ pre code.hljs {
 #context-files > * {
     display: none;
 }
+.question-button {
+    background-color: transparent;
+    color: rgb(77, 124, 138);
+    border: none;
+    font-size: 12px;
+    cursor: pointer;
+    display: block;
+    margin-left: auto;
+}
 .response-button, .delete-button {
     background-color: transparent;
     color: rgb(77, 124, 138);
@@ -391,7 +401,7 @@ pre code.hljs {
     cursor: pointer;
     display: block;
 }
-.response-button:hover, .delete-button:hover {
+.response-button:hover, .delete-button:hover, .question-button:hover {
     color: rgb(115, 178, 198);
 }
 #name {

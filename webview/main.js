@@ -473,7 +473,7 @@ const sanitizeString = (str) => {
 }
 
 /**
- * Formats user questions for the chat history by highlighting '@mentioned' files.
+ * Formats user questions for the chat history by highlighting '@mentioned' files, and preserving line breaks.
  * @param {string} text - The text to format.
  * @returns {string} The formatted text with highlighted mentions.
  */
@@ -507,14 +507,14 @@ const generateRunButton = (key) => {
 
 /**
  * Creates a 'Copy' button for code blocks and chat entries.
+ * @param {string} command - The specific command message to use.
  * @param {string} identifier - The text or id to copy.
  * @param {string} className - The className of the button.
  * @returns {HTMLButtonElement} The copy button element.
  */
-const generateCopyButton = (identifier, className) => {
-    const command = className == 'code-copy' ? 'copy' : 'copyResponse';
+const generateCopyButton = (command, identifier, className) => {
     const message = command == 'copy' ? { command, text: identifier } : { command, key: identifier };
-    const title = command == 'copy' ? 'Copy Code' : 'Copy Response';
+    const title = command == 'copy' ? 'Copy Code' : command == 'copyResponse' ? 'Copy Response' : 'Copy Question'
 
     const copyButton = document.createElement('button');
     copyButton.innerHTML = `<i class="fa-solid fa-copy"></i>`;
@@ -561,17 +561,26 @@ const generateDeleteButton = (element, key) => {
  * @param {string} key - The unique identifier for the chat entry.
  */
 const generateChatEntryButtons = (element, key) => {
+    const questionElement = element.querySelector('.question');
     const responseElement = element.querySelector('.response');
-    if (!responseElement) return;
+    
+    if (responseElement) {
+        const buttonDiv = document.createElement('div');
+        const copyButton = generateCopyButton('copyResponse', key, 'response-button');
+        const deleteButton = generateDeleteButton(element, key);
 
-    const buttonDiv = document.createElement('div');
-    const copyButton = generateCopyButton(key, 'response-button');
-    const deleteButton = generateDeleteButton(element, key);
-
-    buttonDiv.classList.add("code-container-buttons");
-    buttonDiv.appendChild(copyButton);
-    buttonDiv.appendChild(deleteButton);
-    responseElement.appendChild(buttonDiv);
+        buttonDiv.classList.add("code-container-buttons");
+        buttonDiv.appendChild(copyButton);
+        buttonDiv.appendChild(deleteButton);
+        responseElement.appendChild(buttonDiv);
+    }
+    if (questionElement) {
+        const questionButton = questionElement.querySelector('.question-button');
+        if (questionButton) return;
+        const questionKey = questionElement.id;
+        const questionCopyButton = generateCopyButton('copyQuestion', questionKey, 'question-button');
+        questionElement.appendChild(questionCopyButton);
+    }
 }
 
 /**
@@ -585,7 +594,7 @@ const generateButtons = (codeBlock, currentTime, programs=null) => {
     const header = document.createElement('div');
     const runnablePrograms = programs == null ? queue : Object.entries(programs);
     if (!codeBlock.textContent) return;
-    const copyButton = generateCopyButton(codeBlock.textContent.trim(), 'code-copy');
+    const copyButton = generateCopyButton('copy', codeBlock.textContent.trim(), 'code-copy');
 
     container.classList.add('code-container');
     header.classList.add('code-header-response');

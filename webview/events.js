@@ -60,6 +60,11 @@ question.addEventListener("input", (event) => {
     vscode.postMessage({ command: 'updateQuestion', value: question.value, files: mentionedFiles });
 });
 
+question.addEventListener("paste", (event) => {
+    event.preventDefault();
+    vscode.postMessage({ command: "paste" })
+})
+
 question.addEventListener("selectionchange", (event) => {
     if (autocompleteUsed) return;
     let cursorWord = findCurrentCursorWord(event.target.value, event.target.selectionStart);
@@ -163,7 +168,7 @@ window.addEventListener("message", (e) => {
         responseArea.lastElementChild.querySelector('.response').innerText = text;
         generateChatEntryButtons(responseArea.lastElementChild, key);
     } else if (command == 'chat') {
-        appendToChat(text, value);
+        appendToChat(text, value, key);
         highlightNewCodeBlocks();
     } else if (command == 'focus') {
         question.focus();
@@ -238,5 +243,11 @@ window.addEventListener("message", (e) => {
         sessionTitle.innerText = value;
     } else if (command == 'generateHeaders') {
         generateCodeHeaders(value);
+    } else if (command == 'paste') {
+        const ev = new CustomEvent('input', {});
+        question.value += text;
+        question.dispatchEvent(ev);
+    } else {
+        console.log(`[FRONTEND] Unimplemented command: ${command}`)
     }
 });

@@ -2,8 +2,9 @@
  * Appends a new user question to chat history, and creates a div for the response.
  * @param {string} question - The user's question.
  * @param {string} codeSnippet - The user's additional code snippet.
+ * @param {string} key - The unique key that links to this question.
  */
-const appendToChat = (question, codeSnippet) => {
+const appendToChat = (question, codeSnippet, key) => {
     const chatEntry = document.createElement('div');
     chatEntry.classList.add('chat-entry');
 
@@ -24,8 +25,11 @@ const appendToChat = (question, codeSnippet) => {
     }
 
     const questionDiv = document.createElement('div');
+    const copyButton = generateCopyButton('copyQuestion', key, 'question-button')
+
     questionDiv.classList.add('question');
     questionDiv.innerHTML = '<strong>You: </strong>' + formatUserQuestion(question) + snippetHtml;
+    questionDiv.appendChild(copyButton)
     chatEntry.appendChild(questionDiv);
 
     const responseDiv = document.createElement('div');
